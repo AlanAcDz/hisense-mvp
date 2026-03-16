@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
+@import 'tailwindcss';
+
+:root {
+  color-scheme: dark;
+  font-family: 'Space Grotesk', sans-serif;
+  --panel: rgba(7, 20, 34, 0.72);
+  --panel-border: rgba(100, 181, 246, 0.22);
+  --panel-highlight: rgba(69, 168, 242, 0.18);
+  --hisense-cyan: #44d6ff;
+  --hisense-blue: #0ca6ff;
+  --hisense-deep: #052643;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.panel {
+  background: linear-gradient(180deg, rgba(8, 22, 38, 0.88) 0%, rgba(3, 11, 20, 0.94) 100%);
+  border: 1px solid var(--panel-border);
+  box-shadow:
+    0 24px 90px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+}
+
+.glass-outline {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 18px 50px rgba(0, 0, 0, 0.35);
+}
