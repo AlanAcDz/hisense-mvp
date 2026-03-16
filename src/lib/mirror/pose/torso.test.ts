@@ -41,7 +41,8 @@ describe('torso transform', () => {
     const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
 
     const transform = computeTorsoTransform(poseFrame, stageSize, coverLayout, {
-      scaleMultiplier: 1,
+      scaleX: 1,
+      scaleY: 1,
       xOffset: 0,
       yOffset: 0,
       zOffset: 0,

@@ -1,26 +1,27 @@
-import type { ShirtCalibration } from '@/lib/mirror/types';
+import type { ShirtCalibration } from '@/lib/mirror/types'
 
-export const SHIRT_MODEL_URL = '/assets/models/hisense-shirt.glb';
+export const SHIRT_MODEL_URL = '/assets/models/hisense-shirt.glb'
 export const LANDMARK_INDICES = {
   leftShoulder: 11,
   rightShoulder: 12,
   leftHip: 23,
   rightHip: 24,
-} as const;
+} as const
 
-export const REQUIRED_TORSO_INDICES = Object.values(LANDMARK_INDICES);
-export const TORSO_VISIBILITY_THRESHOLD = 0.5;
-export const DETECTION_INTERVAL_MS = 40;
+export const REQUIRED_TORSO_INDICES = Object.values(LANDMARK_INDICES)
+export const TORSO_VISIBILITY_THRESHOLD = 0.5
+export const DETECTION_INTERVAL_MS = 40
 export const POSE_CONFIDENCE = {
   minPoseDetectionConfidence: 0.6,
   minPosePresenceConfidence: 0.6,
   minTrackingConfidence: 0.5,
-};
+}
 
 export const SHIRT_CALIBRATION: ShirtCalibration = {
-  scaleMultiplier: 1.42,
+  scaleX: 1.55,
+  scaleY: 1.2,
   xOffset: 0,
-  yOffset: -0.02,
+  yOffset: -0.09,
   zOffset: 0,
   depthScale: 120,
   baseRotation: {
@@ -28,7 +29,7 @@ export const SHIRT_CALIBRATION: ShirtCalibration = {
     y: Math.PI,
     z: 0,
   },
-};
+}
 
 export const POSE_CONNECTIONS: Array<[number, number]> = [
   [0, 1],
@@ -66,4 +67,4 @@ export const POSE_CONNECTIONS: Array<[number, number]> = [
   [30, 32],
   [27, 31],
   [28, 32],
-];
+]

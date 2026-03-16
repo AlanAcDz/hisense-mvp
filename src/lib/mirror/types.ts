@@ -78,7 +78,8 @@ export interface CaptureCompositionOptions {
 }
 
 export interface ShirtCalibration {
-  scaleMultiplier: number;
+  scaleX: number;
+  scaleY: number;
   xOffset: number;
   yOffset: number;
   zOffset: number;

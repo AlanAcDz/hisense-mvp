@@ -115,11 +115,12 @@ export class ShirtSceneController {
       this.stageSize.height / 2 - transform.center.y,
       this.calibration.zOffset + transform.depth * this.calibration.depthScale
     );
+    const scaleXFactor = (transform.widthPx / this.modelSize.x) * this.calibration.scaleX;
+    const scaleYFactor = (transform.heightPx / this.modelSize.y) * this.calibration.scaleY;
     const targetScale = new Vector3(
-      (transform.widthPx / this.modelSize.x) * this.calibration.scaleMultiplier,
-      (transform.heightPx / this.modelSize.y) * this.calibration.scaleMultiplier,
-      (Math.min(transform.widthPx / this.modelSize.x, transform.heightPx / this.modelSize.y) *
-        this.calibration.scaleMultiplier)
+      scaleXFactor,
+      scaleYFactor,
+      Math.min(scaleXFactor, scaleYFactor)
     );
     const targetRotation = new Quaternion().copy(transform.rotation);
 
