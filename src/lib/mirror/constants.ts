@@ -20,6 +20,7 @@ export const POSE_CONFIDENCE = {
 export const SHIRT_CALIBRATION: ShirtCalibration = {
   scaleX: 1.55,
   scaleY: 1.2,
+  scaleZ: 2.5,
   xOffset: 0,
   yOffset: -0.09,
   zOffset: 0,

@@ -120,7 +120,7 @@ export class ShirtSceneController {
     const targetScale = new Vector3(
       scaleXFactor,
       scaleYFactor,
-      Math.min(scaleXFactor, scaleYFactor)
+      Math.min(scaleXFactor, scaleYFactor) * this.calibration.scaleZ
     );
     const targetRotation = new Quaternion().copy(transform.rotation);
 

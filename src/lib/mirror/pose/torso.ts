@@ -181,7 +181,14 @@ export function computeTorsoTransform(
   const shoulderAngle = getStableScreenAngle(leftShoulderStage, rightShoulderStage);
   const hipAngle = getStableScreenAngle(leftHipStage, rightHipStage);
   const roll = (shoulderAngle + hipAngle) / 2;
-  const rotation = new Quaternion().setFromEuler(new Euler(0, 0, roll));
+
+  const shoulderDx = rightShoulderWorld.x - leftShoulderWorld.x;
+  const shoulderDz = rightShoulderWorld.z - leftShoulderWorld.z;
+  const hipDx = rightHipWorld.x - leftHipWorld.x;
+  const hipDz = rightHipWorld.z - leftHipWorld.z;
+  const yaw = (Math.atan2(shoulderDz, Math.abs(shoulderDx)) + Math.atan2(hipDz, Math.abs(hipDx))) / 2;
+
+  const rotation = new Quaternion().setFromEuler(new Euler(0, yaw, roll));
 
   return {
     center: {
