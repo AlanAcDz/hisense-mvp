@@ -104,9 +104,9 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
     const controller = new ShirtSceneController();
     sceneControllerRef.current = controller;
 
-    if (visualLayerRef.current) {
+    if (stageRef.current) {
       controller.canvas.className = 'absolute inset-0 h-full w-full pointer-events-none';
-      visualLayerRef.current.appendChild(controller.canvas);
+      stageRef.current.appendChild(controller.canvas);
     }
 
     async function loadShirt() {
@@ -311,10 +311,10 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         ref={stageRef}
         className="glass-outline relative aspect-video overflow-hidden rounded-[2rem] border border-white/10 bg-black/60"
       >
-        <div ref={visualLayerRef} className="absolute inset-0 scale-x-[-1]">
+        <div ref={visualLayerRef} className="absolute inset-0">
           <video
             ref={videoRef}
-            className="absolute inset-0 h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full scale-x-[-1] object-cover"
             autoPlay
             muted
             playsInline

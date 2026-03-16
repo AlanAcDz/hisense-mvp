@@ -1,3 +1,4 @@
+import { Euler } from 'three';
 import { computeTorsoTransform, createPoseFrame, getCoverLayout } from '@/lib/mirror/pose/torso';
 import type { PoseLandmark2D, PoseLandmark3D } from '@/lib/mirror/types';
 
@@ -41,6 +42,7 @@ describe('torso transform', () => {
 
     const transform = computeTorsoTransform(poseFrame, stageSize, coverLayout, {
       scaleMultiplier: 1,
+      xOffset: 0,
       yOffset: 0,
       zOffset: 0,
       depthScale: 120,
@@ -64,5 +66,23 @@ describe('torso transform', () => {
     const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
 
     expect(computeTorsoTransform(poseFrame, stageSize, coverLayout)).toBeNull();
+  });
+
+  it('keeps torso roll upright when mirrored camera semantics place the left shoulder on the right side', () => {
+    const normalizedLandmarks = buildNormalizedLandmarks();
+    normalizedLandmarks[11] = { x: 0.61, y: 0.3, z: 0, visibility: 0.98 };
+    normalizedLandmarks[12] = { x: 0.39, y: 0.31, z: 0, visibility: 0.98 };
+    normalizedLandmarks[23] = { x: 0.58, y: 0.7, z: 0, visibility: 0.98 };
+    normalizedLandmarks[24] = { x: 0.42, y: 0.69, z: 0, visibility: 0.98 };
+
+    const poseFrame = createPoseFrame(normalizedLandmarks, buildWorldLandmarks(), 1000);
+    const stageSize = { width: 1280, height: 720 };
+    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
+    const transform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
+
+    expect(transform).not.toBeNull();
+
+    const roll = new Euler().setFromQuaternion(transform!.rotation).z;
+    expect(Math.abs(roll)).toBeLessThan(Math.PI / 4);
   });
 });

@@ -20,6 +20,10 @@ export function drawPoseOverlay(
     return;
   }
 
+  ctx.save();
+  ctx.translate(stageSize.width, 0);
+  ctx.scale(-1, 1);
+
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
@@ -54,4 +58,6 @@ export function drawPoseOverlay(
     ctx.arc(point.x, point.y, isTorsoPoint ? 6 : 3.5, 0, Math.PI * 2);
     ctx.fill();
   });
+
+  ctx.restore();
 }

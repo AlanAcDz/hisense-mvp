@@ -35,11 +35,12 @@ export function composeCaptureFrame(options: CaptureCompositionOptions) {
   ctx.translate(outputWidth, 0);
   ctx.scale(-1, 1);
   ctx.drawImage(videoElement, coverLayout.offsetX, coverLayout.offsetY, coverLayout.width, coverLayout.height);
+  ctx.restore();
+
   ctx.drawImage(rendererCanvas, 0, 0, outputWidth, outputHeight);
   if (showPosePoints && poseCanvas) {
     ctx.drawImage(poseCanvas, 0, 0, outputWidth, outputHeight);
   }
-  ctx.restore();
 
   return canvas.toDataURL('image/jpeg', 0.95);
 }

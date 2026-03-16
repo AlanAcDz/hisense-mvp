@@ -111,7 +111,7 @@ export class ShirtSceneController {
     this.shirtAnchor.visible = true;
 
     const targetPosition = new Vector3(
-      transform.center.x - this.stageSize.width / 2,
+      this.stageSize.width / 2 - transform.center.x + transform.widthPx * this.calibration.xOffset,
       this.stageSize.height / 2 - transform.center.y,
       this.calibration.zOffset + transform.depth * this.calibration.depthScale
     );
@@ -121,13 +121,11 @@ export class ShirtSceneController {
       (Math.min(transform.widthPx / this.modelSize.x, transform.heightPx / this.modelSize.y) *
         this.calibration.scaleMultiplier)
     );
-    const targetRotation = new Quaternion()
-      .copy(transform.rotation as Quaternion)
-      .multiply(this.calibrationQuaternion);
+    const targetRotation = new Quaternion().copy(transform.rotation);
 
-    this.currentPosition = smoothVector3(this.currentPosition, targetPosition, 0.28);
-    this.currentScale = smoothVector3(this.currentScale, targetScale, 0.24);
-    this.currentRotation = smoothQuaternion(this.currentRotation, targetRotation, 0.3);
+    this.currentPosition = smoothVector3(this.currentPosition, targetPosition, 0.65);
+    this.currentScale = smoothVector3(this.currentScale, targetScale, 0.6);
+    this.currentRotation = smoothQuaternion(this.currentRotation, targetRotation, 0.65);
 
     this.shirtAnchor.position.copy(this.currentPosition);
     this.shirtAnchor.scale.copy(this.currentScale);
@@ -153,7 +151,8 @@ export class ShirtSceneController {
     const box = new Box3().setFromObject(modelContainer);
     const center = box.getCenter(new Vector3());
     const size = box.getSize(new Vector3());
-    modelContainer.position.sub(center);
+    nextModel.position.sub(center);
+    modelContainer.quaternion.copy(this.calibrationQuaternion);
 
     this.modelRoot = modelContainer;
     this.modelSize = new Vector3(

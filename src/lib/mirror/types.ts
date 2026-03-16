@@ -1,4 +1,4 @@
-import type { QuaternionLike } from 'three';
+import type { Quaternion } from 'three';
 
 export interface PoseLandmark2D {
   x: number;
@@ -52,10 +52,12 @@ export interface Point2D {
 
 export interface TorsoTransform {
   center: Point2D;
+  topCenter: Point2D;
+  bottomCenter: Point2D;
   widthPx: number;
   heightPx: number;
   depth: number;
-  rotation: QuaternionLike;
+  rotation: Quaternion;
 }
 
 export interface MirrorSceneState {
@@ -77,6 +79,7 @@ export interface CaptureCompositionOptions {
 
 export interface ShirtCalibration {
   scaleMultiplier: number;
+  xOffset: number;
   yOffset: number;
   zOffset: number;
   depthScale: number;

@@ -1,4 +1,4 @@
-import { Matrix4, Quaternion, Vector3 } from 'three';
+import { Euler, Quaternion, Vector3 } from 'three';
 import {
   LANDMARK_INDICES,
   SHIRT_CALIBRATION,
@@ -33,6 +33,13 @@ function midpoint3D(a: PoseLandmark3D, b: PoseLandmark3D) {
 
 function distance2D(a: Point2D, b: Point2D) {
   return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function getStableScreenAngle(a: Point2D, b: Point2D) {
+  const start = a.x <= b.x ? a : b;
+  const end = a.x <= b.x ? b : a;
+
+  return Math.atan2(end.y - start.y, end.x - start.x);
 }
 
 export function createPoseFrame(
@@ -164,29 +171,25 @@ export function computeTorsoTransform(
   const hipStage = mapNormalizedToStagePoint({ ...hipCenter, z: 0 }, stageSize, coverLayout);
   const leftShoulderStage = mapNormalizedToStagePoint(leftShoulder, stageSize, coverLayout);
   const rightShoulderStage = mapNormalizedToStagePoint(rightShoulder, stageSize, coverLayout);
+  const leftHipStage = mapNormalizedToStagePoint(leftHip, stageSize, coverLayout);
+  const rightHipStage = mapNormalizedToStagePoint(rightHip, stageSize, coverLayout);
   const centerStage = mapNormalizedToStagePoint({ ...center, z: 0 }, stageSize, coverLayout);
 
   const widthPx = distance2D(leftShoulderStage, rightShoulderStage);
   const heightPx = distance2D(shoulderStage, hipStage);
 
-  const shoulderCenterWorld = midpoint3D(leftShoulderWorld, rightShoulderWorld);
-  const hipCenterWorld = midpoint3D(leftHipWorld, rightHipWorld);
-  const rightAxis = new Vector3(
-    rightShoulderWorld.x - leftShoulderWorld.x,
-    rightShoulderWorld.y - leftShoulderWorld.y,
-    rightShoulderWorld.z - leftShoulderWorld.z
-  ).normalize();
-  const downAxis = hipCenterWorld.clone().sub(shoulderCenterWorld).normalize();
-  const forwardAxis = new Vector3().crossVectors(rightAxis, downAxis).normalize();
-  const upAxis = new Vector3().crossVectors(forwardAxis, rightAxis).normalize();
-  const basis = new Matrix4().makeBasis(rightAxis, upAxis, forwardAxis);
-  const rotation = new Quaternion().setFromRotationMatrix(basis);
+  const shoulderAngle = getStableScreenAngle(leftShoulderStage, rightShoulderStage);
+  const hipAngle = getStableScreenAngle(leftHipStage, rightHipStage);
+  const roll = (shoulderAngle + hipAngle) / 2;
+  const rotation = new Quaternion().setFromEuler(new Euler(0, 0, roll));
 
   return {
     center: {
       x: centerStage.x,
       y: centerStage.y + heightPx * calibration.yOffset,
     },
+    topCenter: shoulderStage,
+    bottomCenter: hipStage,
     widthPx,
     heightPx,
     depth:

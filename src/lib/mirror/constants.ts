@@ -10,7 +10,7 @@ export const LANDMARK_INDICES = {
 
 export const REQUIRED_TORSO_INDICES = Object.values(LANDMARK_INDICES);
 export const TORSO_VISIBILITY_THRESHOLD = 0.5;
-export const DETECTION_INTERVAL_MS = 80;
+export const DETECTION_INTERVAL_MS = 40;
 export const POSE_CONFIDENCE = {
   minPoseDetectionConfidence: 0.6,
   minPosePresenceConfidence: 0.6,
@@ -18,7 +18,8 @@ export const POSE_CONFIDENCE = {
 };
 
 export const SHIRT_CALIBRATION: ShirtCalibration = {
-  scaleMultiplier: 1.12,
+  scaleMultiplier: 1.42,
+  xOffset: 0,
   yOffset: -0.02,
   zOffset: 0,
   depthScale: 120,
