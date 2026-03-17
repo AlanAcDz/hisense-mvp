@@ -1,7 +1,11 @@
 import type { ShirtCalibration } from '@/lib/mirror/types'
 
-export const SHIRT_MODEL_URL = '/assets/models/hisense-shirt.glb'
-export const BACKGROUND_ASSET_URL = '/assets/backgrounds/hisense-kiosk-stage.svg'
+function withBaseUrl(path: string) {
+  return `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
+}
+
+export const SHIRT_MODEL_URL = withBaseUrl('/assets/models/hisense-shirt.glb')
+export const BACKGROUND_ASSET_URL = withBaseUrl('/assets/backgrounds/hisense-kiosk-stage.svg')
 export const LANDMARK_INDICES = {
   leftShoulder: 11,
   rightShoulder: 12,
