@@ -1,23 +1,23 @@
-import type { ForwardRefExoticComponent, RefAttributes } from 'react';
-import { useRef, useState } from 'react';
+import type { ForwardRefExoticComponent, RefAttributes } from 'react'
+import { useRef, useState } from 'react'
 import {
   MirrorStage,
   type MirrorStageHandle,
   type MirrorStageProps,
-} from '@/components/mirror-stage';
+} from '@/components/mirror-stage'
 
 type MirrorStageComponent = ForwardRefExoticComponent<
   MirrorStageProps & RefAttributes<MirrorStageHandle>
->;
+>
 
 interface MirrorPageProps {
-  StageComponent?: MirrorStageComponent;
+  StageComponent?: MirrorStageComponent
 }
 
 export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
-  const [isActive, setIsActive] = useState(false);
-  const [showPosePoints, setShowPosePoints] = useState(true);
-  const stageRef = useRef<MirrorStageHandle>(null);
+  const [isActive, setIsActive] = useState(false)
+  const [showPosePoints, setShowPosePoints] = useState(true)
+  const stageRef = useRef<MirrorStageHandle>(null)
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-6 py-10">
@@ -29,15 +29,10 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
           <h1 className="mb-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">
             Start the AR mirror
           </h1>
-          <p className="mx-auto mb-10 max-w-lg text-base leading-7 text-white/72">
-            This MVP validates full-body background replacement while preserving the live shirt
-            projection, capture flow, and torso calibration that are already in place.
-          </p>
           <button
             type="button"
             onClick={() => setIsActive(true)}
-            className="rounded-full bg-[linear-gradient(135deg,_var(--hisense-cyan),_var(--hisense-blue))] px-8 py-4 text-lg font-bold text-slate-950 transition hover:scale-[1.01] hover:shadow-[0_18px_45px_rgba(68,214,255,0.35)]"
-          >
+            className="rounded-full bg-[linear-gradient(135deg,_var(--hisense-cyan),_var(--hisense-blue))] px-8 py-4 text-lg font-bold text-slate-950 transition hover:scale-[1.01] hover:shadow-[0_18px_45px_rgba(68,214,255,0.35)]">
             Start Mirror
           </button>
         </section>
@@ -56,8 +51,7 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
               <button
                 type="button"
                 onClick={() => stageRef.current?.capture()}
-                className="rounded-full bg-[linear-gradient(135deg,_var(--hisense-cyan),_var(--hisense-blue))] px-6 py-3 font-semibold text-slate-950"
-              >
+                className="rounded-full bg-[linear-gradient(135deg,_var(--hisense-cyan),_var(--hisense-blue))] px-6 py-3 font-semibold text-slate-950">
                 Capture
               </button>
               <label className="flex items-center justify-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/90">
@@ -77,5 +71,5 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
         </section>
       )}
     </main>
-  );
+  )
 }
