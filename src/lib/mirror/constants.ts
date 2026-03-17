@@ -4,6 +4,8 @@ export const SHIRT_MODEL_URL = '/assets/models/hisense-shirt.glb'
 export const LANDMARK_INDICES = {
   leftShoulder: 11,
   rightShoulder: 12,
+  leftElbow: 13,
+  rightElbow: 14,
   leftHip: 23,
   rightHip: 24,
 } as const

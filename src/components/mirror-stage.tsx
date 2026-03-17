@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { composeCaptureFrame, downloadDataUrl } from '@/lib/mirror/capture/compose-capture';
 import { drawPoseOverlay } from '@/lib/mirror/pose/drawing';
-import { computeTorsoTransform, getCoverLayout } from '@/lib/mirror/pose/torso';
+import { computeSleeveTransform, computeTorsoTransform, getCoverLayout } from '@/lib/mirror/pose/torso';
 import { usePoseLandmarker } from '@/lib/mirror/pose/use-pose-landmarker';
 import { ShirtSceneController } from '@/lib/mirror/three/shirt-scene';
 import type { MirrorSceneState, StageSize } from '@/lib/mirror/types';
@@ -242,10 +242,21 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         );
 
         drawPoseOverlay(currentPoseContext, nextPoseFrame, stageSize, coverLayout, showPosePoints);
-        currentController.updateShirtTransform(computeTorsoTransform(nextPoseFrame, stageSize, coverLayout));
+        const torsoTransform = computeTorsoTransform(nextPoseFrame, stageSize, coverLayout);
+        currentController.updateShirtTransform(torsoTransform);
+
+        if (torsoTransform) {
+          currentController.updateSleeves(
+            computeSleeveTransform(nextPoseFrame?.leftArm ?? null, torsoTransform, stageSize, coverLayout),
+            computeSleeveTransform(nextPoseFrame?.rightArm ?? null, torsoTransform, stageSize, coverLayout)
+          );
+        } else {
+          currentController.updateSleeves(null, null);
+        }
       } else {
         currentPoseContext.clearRect(0, 0, stageSize.width, stageSize.height);
         currentController.updateShirtTransform(null);
+        currentController.updateSleeves(null, null);
       }
 
       currentController.render();

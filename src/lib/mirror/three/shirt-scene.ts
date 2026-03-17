@@ -15,8 +15,9 @@ import {
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SHIRT_CALIBRATION, SHIRT_MODEL_URL } from '@/lib/mirror/constants';
 import { smoothQuaternion, smoothVector3 } from '@/lib/mirror/pose/smoothing';
-import type { ShirtCalibration, StageSize, TorsoTransform } from '@/lib/mirror/types';
+import type { ShirtCalibration, SleeveTransform, StageSize, TorsoTransform } from '@/lib/mirror/types';
 import { createProxyShirtGroup } from '@/lib/mirror/three/proxy-shirt';
+import { createProxySleeveGroup } from '@/lib/mirror/three/proxy-sleeve';
 
 interface ShirtSceneLoadResult {
   errorMessage: string | null;
@@ -37,6 +38,15 @@ export class ShirtSceneController {
   private currentRotation = new Quaternion();
   private calibrationQuaternion = new Quaternion();
 
+  private readonly leftSleeveAnchor: Group;
+  private readonly rightSleeveAnchor: Group;
+  private leftSleevePosition = new Vector3();
+  private leftSleeveScale = new Vector3(1, 1, 1);
+  private leftSleeveRotation = new Quaternion();
+  private rightSleevePosition = new Vector3();
+  private rightSleeveScale = new Vector3(1, 1, 1);
+  private rightSleeveRotation = new Quaternion();
+
   constructor(calibration: ShirtCalibration = SHIRT_CALIBRATION) {
     this.calibration = calibration;
     this.renderer = new WebGLRenderer({
@@ -53,11 +63,19 @@ export class ShirtSceneController {
     this.shirtAnchor = new Group();
     this.shirtAnchor.visible = false;
 
+    this.leftSleeveAnchor = new Group();
+    this.leftSleeveAnchor.visible = false;
+    this.leftSleeveAnchor.add(createProxySleeveGroup());
+
+    this.rightSleeveAnchor = new Group();
+    this.rightSleeveAnchor.visible = false;
+    this.rightSleeveAnchor.add(createProxySleeveGroup());
+
     const ambient = new AmbientLight(0xffffff, 1.15);
     const keyLight = new DirectionalLight(0xffffff, 0.65);
     keyLight.position.set(0, 0, 1);
 
-    this.scene.add(ambient, keyLight, this.shirtAnchor);
+    this.scene.add(ambient, keyLight, this.shirtAnchor, this.leftSleeveAnchor, this.rightSleeveAnchor);
     this.calibrationQuaternion.setFromEuler(
       new Euler(calibration.baseRotation.x, calibration.baseRotation.y, calibration.baseRotation.z)
     );
@@ -133,12 +151,63 @@ export class ShirtSceneController {
     this.shirtAnchor.quaternion.copy(this.currentRotation);
   }
 
+  updateSleeves(
+    leftSleeve: SleeveTransform | null,
+    rightSleeve: SleeveTransform | null
+  ) {
+    this.applySleeve(this.leftSleeveAnchor, leftSleeve, 'left');
+    this.applySleeve(this.rightSleeveAnchor, rightSleeve, 'right');
+  }
+
   render() {
     this.renderer.render(this.scene, this.camera);
   }
 
   dispose() {
     this.renderer.dispose();
+  }
+
+  private applySleeve(
+    anchor: Group,
+    sleeve: SleeveTransform | null,
+    side: 'left' | 'right'
+  ) {
+    if (!sleeve) {
+      anchor.visible = false;
+      return;
+    }
+
+    anchor.visible = true;
+
+    const targetPosition = new Vector3(
+      this.stageSize.width / 2 - sleeve.center.x,
+      this.stageSize.height / 2 - sleeve.center.y,
+      this.shirtAnchor.position.z
+    );
+
+    const targetScale = new Vector3(
+      sleeve.shoulderWidthPx,
+      sleeve.lengthPx,
+      sleeve.elbowWidthPx
+    );
+
+    const targetRotation = new Quaternion().copy(sleeve.rotation);
+
+    if (side === 'left') {
+      this.leftSleevePosition = smoothVector3(this.leftSleevePosition, targetPosition, 0.65);
+      this.leftSleeveScale = smoothVector3(this.leftSleeveScale, targetScale, 0.6);
+      this.leftSleeveRotation = smoothQuaternion(this.leftSleeveRotation, targetRotation, 0.65);
+      anchor.position.copy(this.leftSleevePosition);
+      anchor.scale.copy(this.leftSleeveScale);
+      anchor.quaternion.copy(this.leftSleeveRotation);
+    } else {
+      this.rightSleevePosition = smoothVector3(this.rightSleevePosition, targetPosition, 0.65);
+      this.rightSleeveScale = smoothVector3(this.rightSleeveScale, targetScale, 0.6);
+      this.rightSleeveRotation = smoothQuaternion(this.rightSleeveRotation, targetRotation, 0.65);
+      anchor.position.copy(this.rightSleevePosition);
+      anchor.scale.copy(this.rightSleeveScale);
+      anchor.quaternion.copy(this.rightSleeveRotation);
+    }
   }
 
   private attachModel(nextModel: Object3D) {

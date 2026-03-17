@@ -26,11 +26,21 @@ export interface TorsoLandmarks {
   minimumVisibility: number;
 }
 
+export interface ArmLandmarks {
+  shoulder: PoseLandmark2D;
+  elbow: PoseLandmark2D;
+  shoulderWorld: PoseLandmark3D;
+  elbowWorld: PoseLandmark3D;
+  minimumVisibility: number;
+}
+
 export interface PoseFrame {
   normalizedLandmarks: PoseLandmark2D[];
   worldLandmarks: PoseLandmark3D[];
   timestamp: number;
   torso: TorsoLandmarks | null;
+  leftArm: ArmLandmarks | null;
+  rightArm: ArmLandmarks | null;
 }
 
 export interface StageSize {
@@ -57,6 +67,14 @@ export interface TorsoTransform {
   widthPx: number;
   heightPx: number;
   depth: number;
+  rotation: Quaternion;
+}
+
+export interface SleeveTransform {
+  center: Point2D;
+  lengthPx: number;
+  shoulderWidthPx: number;
+  elbowWidthPx: number;
   rotation: Quaternion;
 }
 

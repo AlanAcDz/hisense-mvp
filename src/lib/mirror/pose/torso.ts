@@ -5,12 +5,14 @@ import {
   TORSO_VISIBILITY_THRESHOLD,
 } from '@/lib/mirror/constants';
 import type {
+  ArmLandmarks,
   CoverLayout,
   Point2D,
   PoseFrame,
   PoseLandmark2D,
   PoseLandmark3D,
   ShirtCalibration,
+  SleeveTransform,
   StageSize,
   TorsoLandmarks,
   TorsoTransform,
@@ -42,6 +44,32 @@ function getStableScreenAngle(a: Point2D, b: Point2D) {
   return Math.atan2(end.y - start.y, end.x - start.x);
 }
 
+export function getArmLandmarks(
+  normalizedLandmarks: PoseLandmark2D[],
+  worldLandmarks: PoseLandmark3D[],
+  side: 'left' | 'right'
+): ArmLandmarks | null {
+  const shoulderIdx = side === 'left' ? LANDMARK_INDICES.leftShoulder : LANDMARK_INDICES.rightShoulder;
+  const elbowIdx = side === 'left' ? LANDMARK_INDICES.leftElbow : LANDMARK_INDICES.rightElbow;
+
+  const shoulder = normalizedLandmarks[shoulderIdx];
+  const elbow = normalizedLandmarks[elbowIdx];
+  const shoulderWorld = worldLandmarks[shoulderIdx];
+  const elbowWorld = worldLandmarks[elbowIdx];
+
+  if (!shoulder || !elbow || !shoulderWorld || !elbowWorld) {
+    return null;
+  }
+
+  return {
+    shoulder,
+    elbow,
+    shoulderWorld,
+    elbowWorld,
+    minimumVisibility: Math.min(visibilityOf(shoulder), visibilityOf(elbow)),
+  };
+}
+
 export function createPoseFrame(
   normalizedLandmarks: PoseLandmark2D[] | undefined,
   worldLandmarks: PoseLandmark3D[] | undefined,
@@ -56,6 +84,8 @@ export function createPoseFrame(
     worldLandmarks,
     timestamp,
     torso: getTorsoLandmarks(normalizedLandmarks, worldLandmarks),
+    leftArm: getArmLandmarks(normalizedLandmarks, worldLandmarks, 'left'),
+    rightArm: getArmLandmarks(normalizedLandmarks, worldLandmarks, 'right'),
   };
 }
 
@@ -207,6 +237,55 @@ export function computeTorsoTransform(
         rightHipWorld.z
       ) /
       4,
+    rotation,
+  };
+}
+
+export function computeSleeveTransform(
+  arm: ArmLandmarks | null,
+  torsoTransform: TorsoTransform,
+  stageSize: StageSize,
+  coverLayout: CoverLayout
+): SleeveTransform | null {
+  if (!arm || arm.minimumVisibility < TORSO_VISIBILITY_THRESHOLD) {
+    return null;
+  }
+
+  const shoulderStage = mapNormalizedToStagePoint(arm.shoulder, stageSize, coverLayout);
+  const elbowStage = mapNormalizedToStagePoint(arm.elbow, stageSize, coverLayout);
+
+  const center = {
+    x: (shoulderStage.x + elbowStage.x) / 2,
+    y: (shoulderStage.y + elbowStage.y) / 2,
+  };
+
+  const lengthPx = distance2D(shoulderStage, elbowStage);
+  const shoulderWidthPx = torsoTransform.widthPx * 0.22;
+  const elbowWidthPx = shoulderWidthPx * 0.7;
+
+  const shoulderThree = {
+    x: stageSize.width / 2 - shoulderStage.x,
+    y: stageSize.height / 2 - shoulderStage.y,
+  };
+  const elbowThree = {
+    x: stageSize.width / 2 - elbowStage.x,
+    y: stageSize.height / 2 - elbowStage.y,
+  };
+
+  const shoulderDir = new Vector3(
+    shoulderThree.x - (shoulderThree.x + elbowThree.x) / 2,
+    shoulderThree.y - (shoulderThree.y + elbowThree.y) / 2,
+    0
+  ).normalize();
+
+  const cylinderUp = new Vector3(0, 1, 0);
+  const rotation = new Quaternion().setFromUnitVectors(cylinderUp, shoulderDir);
+
+  return {
+    center,
+    lengthPx,
+    shoulderWidthPx,
+    elbowWidthPx,
     rotation,
   };
 }
