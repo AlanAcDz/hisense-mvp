@@ -1,0 +1,34 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="960" y1="0" x2="960" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0D3A60"/>
+      <stop offset="0.52" stop-color="#07233B"/>
+      <stop offset="1" stop-color="#01060D"/>
+    </linearGradient>
+    <linearGradient id="cyanArc" x1="248" y1="164" x2="866" y2="548" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#58E1FF" stop-opacity="0.88"/>
+      <stop offset="1" stop-color="#0CA6FF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="blueArc" x1="1656" y1="118" x2="1182" y2="598" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4EDBFF" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#0CA6FF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(960 484) rotate(90) scale(468 880)">
+      <stop stop-color="#57DFFF" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#57DFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#glow)"/>
+  <path d="M138 88C334 114 528 220 674 394C756 492 812 600 862 742" stroke="url(#cyanArc)" stroke-width="26" stroke-linecap="round"/>
+  <path d="M1782 62C1608 108 1446 224 1316 382C1218 500 1142 640 1092 792" stroke="url(#blueArc)" stroke-width="24" stroke-linecap="round"/>
+  <path d="M260 894H1660" stroke="rgba(255,255,255,0.16)" stroke-width="2"/>
+  <path d="M328 826C522 902 744 940 960 940C1176 940 1398 902 1592 826" stroke="rgba(87,223,255,0.3)" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="960" cy="504" r="304" stroke="rgba(87,223,255,0.12)" stroke-width="2"/>
+  <circle cx="960" cy="504" r="396" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+  <rect x="276" y="126" width="168" height="10" rx="5" fill="rgba(255,255,255,0.18)"/>
+  <rect x="1476" y="900" width="188" height="10" rx="5" fill="rgba(255,255,255,0.18)"/>
+  <text x="960" y="166" text-anchor="middle" fill="rgba(255,255,255,0.78)" font-family="Arial, sans-serif" font-size="30" letter-spacing="10">
+    HISENSE AR MIRROR
+  </text>
+</svg>

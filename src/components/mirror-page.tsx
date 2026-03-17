@@ -27,11 +27,11 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
             Hisense AR Mirror MVP
           </div>
           <h1 className="mb-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">
-            Start the torso-fit mirror
+            Start the AR mirror
           </h1>
           <p className="mx-auto mb-10 max-w-lg text-base leading-7 text-white/72">
-            This MVP focuses only on live shirt placement. Background replacement stays off while we
-            validate torso anchoring, rotation, capture, and calibration.
+            This MVP validates full-body background replacement while preserving the live shirt
+            projection, capture flow, and torso calibration that are already in place.
           </p>
           <button
             type="button"
@@ -48,7 +48,9 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
               <p className="text-xs font-medium uppercase tracking-[0.32em] text-cyan-200/80">
                 Hisense Mirror
               </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">Live shirt projection</h1>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">
+                Live shirt + background projection
+              </h1>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <button

@@ -1,6 +1,7 @@
 import type { ShirtCalibration } from '@/lib/mirror/types'
 
 export const SHIRT_MODEL_URL = '/assets/models/hisense-shirt.glb'
+export const BACKGROUND_ASSET_URL = '/assets/backgrounds/hisense-kiosk-stage.svg'
 export const LANDMARK_INDICES = {
   leftShoulder: 11,
   rightShoulder: 12,
@@ -12,12 +13,19 @@ export const LANDMARK_INDICES = {
 
 export const REQUIRED_TORSO_INDICES = Object.values(LANDMARK_INDICES)
 export const TORSO_VISIBILITY_THRESHOLD = 0.5
-export const DETECTION_INTERVAL_MS = 40
+export const DETECTION_INTERVAL_MS = 16
 export const POSE_CONFIDENCE = {
   minPoseDetectionConfidence: 0.6,
   minPosePresenceConfidence: 0.6,
   minTrackingConfidence: 0.5,
 }
+export const BACKGROUND_MASK_STALE_MS = 96
+export const BACKGROUND_MASK_THRESHOLD = 0.48
+export const BACKGROUND_MASK_ALPHA_CURVE = 0.85
+export const BACKGROUND_MASK_DILATION_RADIUS = 2
+export const BACKGROUND_MASK_FEATHER_PASSES = 3
+export const BACKGROUND_MASK_DRAW_BLUR_PX = 3
+export const BACKGROUND_MASK_MIN_COVERAGE = 0.015
 
 export const SHIRT_CALIBRATION: ShirtCalibration = {
   scaleX: 1.55,

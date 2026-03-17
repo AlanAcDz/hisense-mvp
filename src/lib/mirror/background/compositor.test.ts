@@ -1,0 +1,103 @@
+import {
+  copySegmentationAlpha,
+  createBackgroundMatte,
+  resolveBackgroundMatte,
+} from '@/lib/mirror/background/compositor';
+import type { BackgroundMatte, SegmentationFrame } from '@/lib/mirror/types';
+
+function createSegmentationFrame(
+  width: number,
+  height: number,
+  values: Float32Array,
+  timestamp = 1000
+): SegmentationFrame {
+  return {
+    width,
+    height,
+    alpha: values,
+    timestamp,
+  };
+}
+
+describe('background compositor', () => {
+  it('copies segmentation confidence into a reusable alpha mask', () => {
+    const segmentationFrame = createSegmentationFrame(
+      4,
+      1,
+      new Float32Array([0.12, 0.48, 0.74, 1])
+    );
+
+    expect(Array.from(copySegmentationAlpha(segmentationFrame))).toEqual([0, 0, 141, 255]);
+  });
+
+  it('dilates and feathers the matte to soften clipped edges', () => {
+    const alpha = new Float32Array(25);
+    alpha[12] = 1;
+    const segmentationFrame = createSegmentationFrame(5, 5, alpha);
+
+    const matte = createBackgroundMatte(segmentationFrame);
+
+    expect(matte.alpha[12]).toBeGreaterThan(150);
+    expect(matte.alpha[7]).toBeGreaterThan(0);
+    expect(matte.coverage).toBeGreaterThan(0);
+  });
+
+  it('reuses the last good matte while the new mask is temporarily missing', () => {
+    const previousMatte: BackgroundMatte = {
+      width: 3,
+      height: 3,
+      alpha: new Uint8ClampedArray(9).fill(255),
+      coverage: 1,
+      timestamp: 1000,
+    };
+
+    const result = resolveBackgroundMatte({
+      segmentationFrame: null,
+      previousMatte,
+      now: 1080,
+    });
+
+    expect(result.matte).toBe(previousMatte);
+    expect(result.reusedPrevious).toBe(true);
+  });
+
+  it('falls back to the cached matte when the new mask coverage is too weak', () => {
+    const weakMask = new Float32Array(60 * 60);
+    weakMask[1830] = 1;
+    const previousMatte: BackgroundMatte = {
+      width: 10,
+      height: 10,
+      alpha: new Uint8ClampedArray(100).fill(255),
+      coverage: 1,
+      timestamp: 950,
+    };
+
+    const result = resolveBackgroundMatte({
+      segmentationFrame: createSegmentationFrame(60, 60, weakMask, 1000),
+      previousMatte,
+      now: 1020,
+    });
+
+    expect(result.matte).toBe(previousMatte);
+    expect(result.reusedPrevious).toBe(true);
+  });
+
+  it('drops a stale cached matte after the reuse window expires', () => {
+    const previousMatte: BackgroundMatte = {
+      width: 3,
+      height: 3,
+      alpha: new Uint8ClampedArray(9).fill(255),
+      coverage: 1,
+      timestamp: 1000,
+    };
+
+    const result = resolveBackgroundMatte({
+      segmentationFrame: null,
+      previousMatte,
+      now: 1400,
+    });
+
+    expect(result.matte).toBeNull();
+    expect(result.reusedPrevious).toBe(false);
+  });
+});

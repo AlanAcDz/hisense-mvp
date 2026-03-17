@@ -43,6 +43,26 @@ export interface PoseFrame {
   rightArm: ArmLandmarks | null;
 }
 
+export interface SegmentationFrame {
+  width: number;
+  height: number;
+  alpha: Float32Array;
+  timestamp: number;
+}
+
+export interface BackgroundMatte {
+  width: number;
+  height: number;
+  alpha: Uint8ClampedArray;
+  coverage: number;
+  timestamp: number;
+}
+
+export interface LandmarkerFrame {
+  poseFrame: PoseFrame | null;
+  segmentationFrame: SegmentationFrame | null;
+}
+
 export interface StageSize {
   width: number;
   height: number;
@@ -78,16 +98,21 @@ export interface SleeveTransform {
   rotation: Quaternion;
 }
 
+export type BackgroundMode = 'loading' | 'active' | 'paused';
+
 export interface MirrorSceneState {
   cameraError: string | null;
   poseError: string | null;
   poseModelLoading: boolean;
   shirtAssetLoading: boolean;
   shirtAssetError: string | null;
+  backgroundMode: BackgroundMode;
+  backgroundGuidance: string | null;
 }
 
 export interface CaptureCompositionOptions {
-  videoElement: HTMLVideoElement;
+  backgroundCanvas: HTMLCanvasElement | null;
+  foregroundCanvas: HTMLCanvasElement | null;
   rendererCanvas: HTMLCanvasElement;
   poseCanvas: HTMLCanvasElement | null;
   outputWidth: number;

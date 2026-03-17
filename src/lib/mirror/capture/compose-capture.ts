@@ -1,9 +1,9 @@
-import { getCoverLayout } from '@/lib/mirror/pose/torso';
 import type { CaptureCompositionOptions } from '@/lib/mirror/types';
 
 export function composeCaptureFrame(options: CaptureCompositionOptions) {
   const {
-    videoElement,
+    backgroundCanvas,
+    foregroundCanvas,
     rendererCanvas,
     poseCanvas,
     outputWidth,
@@ -20,22 +20,13 @@ export function composeCaptureFrame(options: CaptureCompositionOptions) {
     throw new Error('Could not create capture canvas.');
   }
 
-  const coverLayout = getCoverLayout(
-    {
-      width: videoElement.videoWidth,
-      height: videoElement.videoHeight,
-    },
-    {
-      width: outputWidth,
-      height: outputHeight,
-    }
-  );
+  if (backgroundCanvas) {
+    ctx.drawImage(backgroundCanvas, 0, 0, outputWidth, outputHeight);
+  }
 
-  ctx.save();
-  ctx.translate(outputWidth, 0);
-  ctx.scale(-1, 1);
-  ctx.drawImage(videoElement, coverLayout.offsetX, coverLayout.offsetY, coverLayout.width, coverLayout.height);
-  ctx.restore();
+  if (foregroundCanvas) {
+    ctx.drawImage(foregroundCanvas, 0, 0, outputWidth, outputHeight);
+  }
 
   ctx.drawImage(rendererCanvas, 0, 0, outputWidth, outputHeight);
   if (showPosePoints && poseCanvas) {
