@@ -35,6 +35,37 @@ function clamp01(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
+function getCoverLayoutForSource(
+  sourceWidth: number,
+  sourceHeight: number,
+  stageSize: StageSize
+): CoverLayout {
+  const sourceAspect = sourceWidth / sourceHeight;
+  const stageAspect = stageSize.width / stageSize.height;
+
+  if (sourceAspect > stageAspect) {
+    const height = stageSize.height;
+    const width = height * sourceAspect;
+
+    return {
+      width,
+      height,
+      offsetX: (stageSize.width - width) / 2,
+      offsetY: 0,
+    };
+  }
+
+  const width = stageSize.width;
+  const height = width / sourceAspect;
+
+  return {
+    width,
+    height,
+    offsetX: 0,
+    offsetY: (stageSize.height - height) / 2,
+  };
+}
+
 export function copySegmentationAlpha(
   segmentationFrame: SegmentationFrame,
   threshold = BACKGROUND_MASK_THRESHOLD,
@@ -226,7 +257,19 @@ export function drawBackgroundLayer(
   ctx.clearRect(0, 0, stageSize.width, stageSize.height);
 
   if (backgroundImage?.complete && backgroundImage.naturalWidth > 0) {
-    ctx.drawImage(backgroundImage, 0, 0, stageSize.width, stageSize.height);
+    const coverLayout = getCoverLayoutForSource(
+      backgroundImage.naturalWidth,
+      backgroundImage.naturalHeight,
+      stageSize
+    );
+
+    ctx.drawImage(
+      backgroundImage,
+      coverLayout.offsetX,
+      coverLayout.offsetY,
+      coverLayout.width,
+      coverLayout.height
+    );
     return;
   }
 

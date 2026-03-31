@@ -134,20 +134,20 @@ describe('torso transform', () => {
     expect(sleeveTransform?.lengthPx).toBeCloseTo(expectedArmLength * 0.64, 4);
     expect(sleeveTransform?.center.x).toBeCloseTo(
       expectedShoulder.x +
-        (expectedElbow.x - expectedShoulder.x) * 0.32 +
+        (expectedElbow.x - expectedShoulder.x) * 0.5 +
         expectedShoulderLift.x * expectedShoulderLiftPx,
       4
     );
     expect(sleeveTransform?.center.y).toBeCloseTo(
       expectedShoulder.y +
-        (expectedElbow.y - expectedShoulder.y) * 0.32 +
+        (expectedElbow.y - expectedShoulder.y) * 0.5 +
         expectedShoulderLift.y * expectedShoulderLiftPx,
       4
     );
     expect(sleeveTransform?.shoulderWidthPx).toBeGreaterThan(torsoTransform!.widthPx * 0.27);
     expect(sleeveTransform?.elbowWidthPx).toBeGreaterThan(expectedArmLength * 0.16);
     expect(sleeveTransform!.center.y).toBeGreaterThan(
-      expectedShoulder.y + (expectedElbow.y - expectedShoulder.y) * 0.32
+      expectedShoulder.y + (expectedElbow.y - expectedShoulder.y) * 0.5
     );
   });
 });

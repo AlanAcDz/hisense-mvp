@@ -42,16 +42,16 @@ export const SHIRT_CALIBRATION: ShirtCalibration = {
   depthScale: 120,
   baseRotation: {
     x: 0,
-    y: Math.PI,
+    y: 0,
     z: 0,
   },
 }
 
 export const SLEEVE_CALIBRATION: SleeveCalibration = {
-  scaleX: 1.38,
-  scaleY: 1.08,
-  scaleZ: 1.34,
-  yOffset: 0.34,
+  scaleX: 1.2075,
+  scaleY: 0.945,
+  scaleZ: 1.1725,
+  yOffset: 0.51,
   zOffset: 14,
   baseRotation: {
     x: Math.PI,

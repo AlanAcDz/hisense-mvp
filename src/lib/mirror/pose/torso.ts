@@ -272,8 +272,8 @@ export function computeSleeveTransform(
   const shoulderLiftPx = Math.max(torsoTransform.widthPx * 0.08, armLengthPx * 0.1);
 
   const center = {
-    x: shoulderStage.x + armVector.x * 0.32 + shoulderLiftNormal.x * shoulderLiftPx,
-    y: shoulderStage.y + armVector.y * 0.32 + shoulderLiftNormal.y * shoulderLiftPx,
+    x: shoulderStage.x + armVector.x * 0.5 + shoulderLiftNormal.x * shoulderLiftPx,
+    y: shoulderStage.y + armVector.y * 0.5 + shoulderLiftNormal.y * shoulderLiftPx,
   };
 
   const lengthPx = armLengthPx * 0.64;

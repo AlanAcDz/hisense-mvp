@@ -1,6 +1,7 @@
 import {
   copySegmentationAlpha,
   createBackgroundMatte,
+  drawBackgroundLayer,
   resolveBackgroundMatte,
 } from '@/lib/mirror/background/compositor';
 import type { BackgroundMatte, SegmentationFrame } from '@/lib/mirror/types';
@@ -99,5 +100,43 @@ describe('background compositor', () => {
 
     expect(result.matte).toBeNull();
     expect(result.reusedPrevious).toBe(false);
+  });
+
+  it('draws the background image with cover sizing on a wider stage', () => {
+    const drawImage = vi.fn();
+    const ctx = {
+      clearRect: vi.fn(),
+      drawImage,
+      createLinearGradient: vi.fn(),
+      fillRect: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+    const backgroundImage = {
+      complete: true,
+      naturalWidth: 1000,
+      naturalHeight: 500,
+    } as HTMLImageElement;
+
+    drawBackgroundLayer(ctx, { width: 300, height: 300 }, backgroundImage);
+
+    expect(drawImage).toHaveBeenCalledWith(backgroundImage, -150, 0, 600, 300);
+  });
+
+  it('draws the background image with cover sizing on a taller stage', () => {
+    const drawImage = vi.fn();
+    const ctx = {
+      clearRect: vi.fn(),
+      drawImage,
+      createLinearGradient: vi.fn(),
+      fillRect: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+    const backgroundImage = {
+      complete: true,
+      naturalWidth: 500,
+      naturalHeight: 1000,
+    } as HTMLImageElement;
+
+    drawBackgroundLayer(ctx, { width: 300, height: 300 }, backgroundImage);
+
+    expect(drawImage).toHaveBeenCalledWith(backgroundImage, 0, -150, 300, 600);
   });
 });
