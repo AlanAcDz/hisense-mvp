@@ -117,18 +117,37 @@ describe('torso transform', () => {
       expectedElbow.x - expectedShoulder.x,
       expectedElbow.y - expectedShoulder.y
     );
+    const expectedArmNormal = {
+      x: -(expectedElbow.y - expectedShoulder.y) / expectedArmLength,
+      y: (expectedElbow.x - expectedShoulder.x) / expectedArmLength,
+    };
+    const expectedShoulderLift =
+      expectedArmNormal.y < 0
+        ? {
+            x: -expectedArmNormal.x,
+            y: -expectedArmNormal.y,
+          }
+        : expectedArmNormal;
+    const expectedShoulderLiftPx = Math.max(torsoTransform!.widthPx * 0.08, expectedArmLength * 0.1);
 
     expect(sleeveTransform).not.toBeNull();
     expect(sleeveTransform?.lengthPx).toBeCloseTo(expectedArmLength * 0.64, 4);
     expect(sleeveTransform?.center.x).toBeCloseTo(
-      expectedShoulder.x + (expectedElbow.x - expectedShoulder.x) * 0.32,
+      expectedShoulder.x +
+        (expectedElbow.x - expectedShoulder.x) * 0.32 +
+        expectedShoulderLift.x * expectedShoulderLiftPx,
       4
     );
     expect(sleeveTransform?.center.y).toBeCloseTo(
-      expectedShoulder.y + (expectedElbow.y - expectedShoulder.y) * 0.32,
+      expectedShoulder.y +
+        (expectedElbow.y - expectedShoulder.y) * 0.32 +
+        expectedShoulderLift.y * expectedShoulderLiftPx,
       4
     );
     expect(sleeveTransform?.shoulderWidthPx).toBeGreaterThan(torsoTransform!.widthPx * 0.27);
     expect(sleeveTransform?.elbowWidthPx).toBeGreaterThan(expectedArmLength * 0.16);
+    expect(sleeveTransform!.center.y).toBeGreaterThan(
+      expectedShoulder.y + (expectedElbow.y - expectedShoulder.y) * 0.32
+    );
   });
 });

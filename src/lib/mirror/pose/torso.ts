@@ -258,10 +258,22 @@ export function computeSleeveTransform(
     y: elbowStage.y - shoulderStage.y,
   };
   const armLengthPx = distance2D(shoulderStage, elbowStage);
+  const armNormal = {
+    x: -armVector.y / Math.max(armLengthPx, 0.001),
+    y: armVector.x / Math.max(armLengthPx, 0.001),
+  };
+  const shoulderLiftNormal =
+    armNormal.y < 0
+      ? {
+          x: -armNormal.x,
+          y: -armNormal.y,
+        }
+      : armNormal;
+  const shoulderLiftPx = Math.max(torsoTransform.widthPx * 0.08, armLengthPx * 0.1);
 
   const center = {
-    x: shoulderStage.x + armVector.x * 0.32,
-    y: shoulderStage.y + armVector.y * 0.32,
+    x: shoulderStage.x + armVector.x * 0.32 + shoulderLiftNormal.x * shoulderLiftPx,
+    y: shoulderStage.y + armVector.y * 0.32 + shoulderLiftNormal.y * shoulderLiftPx,
   };
 
   const lengthPx = armLengthPx * 0.64;

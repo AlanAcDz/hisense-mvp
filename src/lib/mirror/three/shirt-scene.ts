@@ -226,14 +226,13 @@ export class ShirtSceneController {
 
     anchor.visible = true;
 
-    const targetPosition = new Vector3(
-      this.stageSize.width / 2 - sleeve.center.x,
-      this.stageSize.height / 2 - sleeve.center.y,
-      this.shirtAnchor.position.z + this.sleeveCalibration.zOffset
-    );
-
     const modelSize = side === 'left' ? this.leftSleeveModelSize : this.rightSleeveModelSize;
     const sleeveWidth = (sleeve.shoulderWidthPx + sleeve.elbowWidthPx) / 2;
+    const targetPosition = new Vector3(
+      this.stageSize.width / 2 - sleeve.center.x,
+      this.stageSize.height / 2 - sleeve.center.y + sleeveWidth * this.sleeveCalibration.yOffset,
+      this.shirtAnchor.position.z + this.sleeveCalibration.zOffset
+    );
     const targetScale = new Vector3(
       (sleeveWidth / Math.max(modelSize.x, 0.001)) * this.sleeveCalibration.scaleX,
       (sleeve.lengthPx / Math.max(modelSize.y, 0.001)) * this.sleeveCalibration.scaleY,

@@ -139,6 +139,7 @@ export interface SleeveCalibration {
   scaleX: number;
   scaleY: number;
   scaleZ: number;
+  yOffset: number;
   zOffset: number;
   baseRotation: {
     x: number;
