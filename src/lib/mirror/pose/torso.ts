@@ -253,28 +253,29 @@ export function computeSleeveTransform(
 
   const shoulderStage = mapNormalizedToStagePoint(arm.shoulder, stageSize, coverLayout);
   const elbowStage = mapNormalizedToStagePoint(arm.elbow, stageSize, coverLayout);
+  const armVector = {
+    x: elbowStage.x - shoulderStage.x,
+    y: elbowStage.y - shoulderStage.y,
+  };
+  const armLengthPx = distance2D(shoulderStage, elbowStage);
 
   const center = {
-    x: (shoulderStage.x + elbowStage.x) / 2,
-    y: (shoulderStage.y + elbowStage.y) / 2,
+    x: shoulderStage.x + armVector.x * 0.32,
+    y: shoulderStage.y + armVector.y * 0.32,
   };
 
-  const lengthPx = distance2D(shoulderStage, elbowStage);
-  const shoulderWidthPx = torsoTransform.widthPx * 0.22;
-  const elbowWidthPx = shoulderWidthPx * 0.7;
+  const lengthPx = armLengthPx * 0.64;
+  const shoulderWidthPx = Math.max(torsoTransform.widthPx * 0.34, armLengthPx * 0.24);
+  const elbowWidthPx = Math.max(shoulderWidthPx * 0.94, armLengthPx * 0.22);
 
   const shoulderThree = {
     x: stageSize.width / 2 - shoulderStage.x,
     y: stageSize.height / 2 - shoulderStage.y,
   };
-  const elbowThree = {
-    x: stageSize.width / 2 - elbowStage.x,
-    y: stageSize.height / 2 - elbowStage.y,
-  };
 
   const shoulderDir = new Vector3(
-    shoulderThree.x - (shoulderThree.x + elbowThree.x) / 2,
-    shoulderThree.y - (shoulderThree.y + elbowThree.y) / 2,
+    stageSize.width / 2 - center.x - shoulderThree.x,
+    stageSize.height / 2 - center.y - shoulderThree.y,
     0
   ).normalize();
 

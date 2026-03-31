@@ -24,7 +24,14 @@ import type { MirrorSceneState, StageSize } from '@/lib/mirror/types';
 
 type ShirtSceneControllerRuntime = Pick<
   ShirtSceneController,
-  'canvas' | 'dispose' | 'loadShirtModel' | 'render' | 'resize' | 'updateShirtTransform' | 'updateSleeves'
+  | 'canvas'
+  | 'dispose'
+  | 'loadShirtModel'
+  | 'render'
+  | 'resize'
+  | 'setJerseyOpacity'
+  | 'updateShirtTransform'
+  | 'updateSleeves'
 >;
 
 const DEFAULT_CREATE_SCENE_CONTROLLER = () => new ShirtSceneController();
@@ -34,7 +41,9 @@ export interface MirrorStageHandle {
 }
 
 export interface MirrorStageProps {
+  jerseyOpacity: number;
   showPosePoints: boolean;
+  onStatusChange?: (status: string | null) => void;
   createSceneController?: () => ShirtSceneControllerRuntime;
   usePoseLandmarkerRuntime?: () => Pick<
     ReturnType<typeof usePoseLandmarker>,
@@ -88,7 +97,9 @@ function clearCanvas(canvas: HTMLCanvasElement | null, stageSize: StageSize) {
 
 export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function MirrorStage(
   {
+    jerseyOpacity,
     showPosePoints,
+    onStatusChange,
     createSceneController = DEFAULT_CREATE_SCENE_CONTROLLER,
     usePoseLandmarkerRuntime = usePoseLandmarker,
   },
@@ -119,26 +130,32 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
 
   const { detectFrame, error: poseError, isLoading: poseModelLoading } = usePoseLandmarkerRuntime();
   const stageSize = useStageSize(stageRef);
-  const statusLines = useMemo(
+  const statusMessage = useMemo(
     () =>
-      [
-        sceneState.cameraError,
-        poseModelLoading ? 'Loading pose model...' : null,
-        poseError ?? sceneState.poseError,
-        sceneState.shirtAssetLoading ? 'Loading shirt asset...' : null,
-        sceneState.shirtAssetError,
-        sceneState.backgroundMode === 'loading' ? 'Loading background replacement...' : null,
-      ].filter(Boolean) as string[],
+      sceneState.cameraError ??
+      (poseModelLoading ? 'Loading pose model...' : null) ??
+      poseError ??
+      sceneState.poseError ??
+      (sceneState.shirtAssetLoading ? 'Loading jersey assets...' : null) ??
+      sceneState.shirtAssetError ??
+      (sceneState.backgroundMode === 'loading' ? 'Loading background replacement...' : null) ??
+      (sceneState.backgroundMode === 'paused' ? sceneState.backgroundGuidance : null) ??
+      null,
     [
       poseError,
       poseModelLoading,
       sceneState.backgroundMode,
       sceneState.cameraError,
+      sceneState.backgroundGuidance,
       sceneState.poseError,
       sceneState.shirtAssetError,
       sceneState.shirtAssetLoading,
     ]
   );
+
+  useEffect(() => {
+    onStatusChange?.(statusMessage);
+  }, [onStatusChange, statusMessage]);
 
   useEffect(() => {
     const backgroundImage = new Image();
@@ -183,6 +200,10 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       sceneControllerRef.current = null;
     };
   }, [createSceneController]);
+
+  useEffect(() => {
+    sceneControllerRef.current?.setJerseyOpacity(jerseyOpacity);
+  }, [jerseyOpacity]);
 
   useEffect(() => {
     setSceneState((previous) => ({
@@ -464,45 +485,21 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      {statusLines.length > 0 && (
-        <div className="flex flex-wrap gap-2 text-sm text-white/88">
-          {statusLines.map((statusLine) => (
-            <span
-              key={statusLine}
-              className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1"
-            >
-              {statusLine}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div
-        ref={stageRef}
-        className="glass-outline relative aspect-video overflow-hidden rounded-[2rem] border border-white/10 bg-black/60"
-      >
-        <video ref={videoRef} className="hidden" autoPlay muted playsInline />
-        <canvas
-          ref={backgroundCanvasRef}
-          className="pointer-events-none absolute inset-0 h-full w-full"
-        />
-        <canvas
-          ref={foregroundCanvasRef}
-          className="pointer-events-none absolute inset-0 h-full w-full"
-        />
-        <div ref={shirtLayerRef} className="pointer-events-none absolute inset-0" />
-        <canvas ref={poseCanvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
-
-        {sceneState.backgroundMode === 'paused' && sceneState.backgroundGuidance && (
-          <div
-            data-testid="background-guidance"
-            className="absolute right-4 bottom-4 max-w-sm rounded-2xl border border-white/12 bg-slate-950/72 px-4 py-3 text-sm font-medium text-white/88 backdrop-blur-md"
-          >
-            {sceneState.backgroundGuidance}
-          </div>
-        )}
-      </div>
+    <div
+      ref={stageRef}
+      className="relative h-dvh w-screen overflow-hidden bg-black"
+    >
+      <video ref={videoRef} className="hidden" autoPlay muted playsInline />
+      <canvas
+        ref={backgroundCanvasRef}
+        className="pointer-events-none absolute inset-0 h-full w-full"
+      />
+      <canvas
+        ref={foregroundCanvasRef}
+        className="pointer-events-none absolute inset-0 h-full w-full"
+      />
+      <div ref={shirtLayerRef} className="pointer-events-none absolute inset-0" />
+      <canvas ref={poseCanvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
     </div>
   );
 });

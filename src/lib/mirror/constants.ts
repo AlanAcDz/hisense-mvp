@@ -1,11 +1,12 @@
-import type { ShirtCalibration } from '@/lib/mirror/types'
+import type { ShirtCalibration, SleeveCalibration } from '@/lib/mirror/types'
 
 function withBaseUrl(path: string) {
   return `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
 }
 
-export const SHIRT_MODEL_URL = withBaseUrl('/assets/models/hisense-shirt.glb')
-export const BACKGROUND_ASSET_URL = withBaseUrl('/assets/backgrounds/hisense-kiosk-stage.svg')
+export const JERSEY_FRONT_MODEL_URL = withBaseUrl('/assets/models/hisense-jersey-front.glb')
+export const JERSEY_SLEEVES_MODEL_URL = withBaseUrl('/assets/models/hisense-jersey-sleeves.glb')
+export const BACKGROUND_ASSET_URL = withBaseUrl('/assets/backgrounds/hisense-football-stadium-2026.jpg')
 export const LANDMARK_INDICES = {
   leftShoulder: 11,
   rightShoulder: 12,
@@ -42,6 +43,18 @@ export const SHIRT_CALIBRATION: ShirtCalibration = {
   baseRotation: {
     x: 0,
     y: Math.PI,
+    z: 0,
+  },
+}
+
+export const SLEEVE_CALIBRATION: SleeveCalibration = {
+  scaleX: 1.28,
+  scaleY: 1.08,
+  scaleZ: 1.24,
+  zOffset: 14,
+  baseRotation: {
+    x: Math.PI,
+    y: 0,
     z: 0,
   },
 }

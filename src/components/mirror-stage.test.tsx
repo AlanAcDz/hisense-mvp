@@ -46,6 +46,7 @@ describe('MirrorStage', () => {
     loadShirtModel: vi.fn().mockResolvedValue({ errorMessage: null, usedFallback: false }),
     render: vi.fn(),
     resize: vi.fn(),
+    setJerseyOpacity: vi.fn(),
     updateShirtTransform: vi.fn(),
     updateSleeves: vi.fn(),
   };
@@ -169,16 +170,20 @@ describe('MirrorStage', () => {
       poseFrame,
       segmentationFrame: null,
     };
+    const onStatusChange = vi.fn();
 
     render(
       <MirrorStage
+        jerseyOpacity={0.1}
         showPosePoints={false}
+        onStatusChange={onStatusChange}
         createSceneController={() => ({
           canvas: document.createElement('canvas'),
           dispose: shirtSceneSpies.dispose,
           loadShirtModel: shirtSceneSpies.loadShirtModel,
           render: shirtSceneSpies.render,
           resize: shirtSceneSpies.resize,
+          setJerseyOpacity: shirtSceneSpies.setJerseyOpacity,
           updateShirtTransform: shirtSceneSpies.updateShirtTransform,
           updateSleeves: shirtSceneSpies.updateSleeves,
         })}
@@ -194,7 +199,8 @@ describe('MirrorStage', () => {
     await act(async () => {});
     flushNextFrame();
 
-    expect(screen.getByTestId('background-guidance')).toHaveTextContent(/improve lighting/i);
+    expect(onStatusChange).toHaveBeenCalledWith(expect.stringMatching(/improve lighting/i));
+    expect(shirtSceneSpies.setJerseyOpacity).toHaveBeenCalledWith(0.1);
     expect(
       shirtSceneSpies.updateShirtTransform.mock.calls.some(([transform]) => Boolean(transform))
     ).toBe(true);

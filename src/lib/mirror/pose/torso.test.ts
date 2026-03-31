@@ -1,5 +1,10 @@
 import { Euler } from 'three';
-import { computeTorsoTransform, createPoseFrame, getCoverLayout } from '@/lib/mirror/pose/torso';
+import {
+  computeSleeveTransform,
+  computeTorsoTransform,
+  createPoseFrame,
+  getCoverLayout,
+} from '@/lib/mirror/pose/torso';
 import type { PoseLandmark2D, PoseLandmark3D } from '@/lib/mirror/types';
 
 function buildNormalizedLandmarks(visibility = 0.98) {
@@ -12,6 +17,8 @@ function buildNormalizedLandmarks(visibility = 0.98) {
 
   landmarks[11] = { x: 0.4, y: 0.3, z: 0, visibility };
   landmarks[12] = { x: 0.6, y: 0.3, z: 0, visibility };
+  landmarks[13] = { x: 0.3, y: 0.47, z: 0, visibility };
+  landmarks[14] = { x: 0.7, y: 0.47, z: 0, visibility };
   landmarks[23] = { x: 0.43, y: 0.7, z: 0, visibility };
   landmarks[24] = { x: 0.57, y: 0.7, z: 0, visibility };
 
@@ -28,6 +35,8 @@ function buildWorldLandmarks(visibility = 0.98) {
 
   landmarks[11] = { x: -0.18, y: -0.08, z: -0.25, visibility };
   landmarks[12] = { x: 0.18, y: -0.08, z: -0.23, visibility };
+  landmarks[13] = { x: -0.34, y: 0.08, z: -0.18, visibility };
+  landmarks[14] = { x: 0.34, y: 0.08, z: -0.17, visibility };
   landmarks[23] = { x: -0.14, y: 0.38, z: -0.2, visibility };
   landmarks[24] = { x: 0.14, y: 0.38, z: -0.19, visibility };
 
@@ -86,5 +95,40 @@ describe('torso transform', () => {
 
     const roll = new Euler().setFromQuaternion(transform!.rotation).z;
     expect(Math.abs(roll)).toBeLessThan(Math.PI / 4);
+  });
+
+  it('extends sleeves farther down the upper arm with a thicker fit heuristic', () => {
+    const poseFrame = createPoseFrame(buildNormalizedLandmarks(), buildWorldLandmarks(), 1000);
+    const stageSize = { width: 1280, height: 720 };
+    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
+    const torsoTransform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
+
+    expect(torsoTransform).not.toBeNull();
+
+    const sleeveTransform = computeSleeveTransform(
+      poseFrame?.leftArm ?? null,
+      torsoTransform!,
+      stageSize,
+      coverLayout
+    );
+    const expectedShoulder = { x: stageSize.width * 0.4, y: stageSize.height * 0.3 };
+    const expectedElbow = { x: stageSize.width * 0.3, y: stageSize.height * 0.47 };
+    const expectedArmLength = Math.hypot(
+      expectedElbow.x - expectedShoulder.x,
+      expectedElbow.y - expectedShoulder.y
+    );
+
+    expect(sleeveTransform).not.toBeNull();
+    expect(sleeveTransform?.lengthPx).toBeCloseTo(expectedArmLength * 0.64, 4);
+    expect(sleeveTransform?.center.x).toBeCloseTo(
+      expectedShoulder.x + (expectedElbow.x - expectedShoulder.x) * 0.32,
+      4
+    );
+    expect(sleeveTransform?.center.y).toBeCloseTo(
+      expectedShoulder.y + (expectedElbow.y - expectedShoulder.y) * 0.32,
+      4
+    );
+    expect(sleeveTransform?.shoulderWidthPx).toBeGreaterThan(torsoTransform!.widthPx * 0.27);
+    expect(sleeveTransform?.elbowWidthPx).toBeGreaterThan(expectedArmLength * 0.16);
   });
 });

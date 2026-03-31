@@ -5,6 +5,8 @@ import {
   Euler,
   Group,
   LoadingManager,
+  Material,
+  Mesh,
   Object3D,
   OrthographicCamera,
   Quaternion,
@@ -13,9 +15,20 @@ import {
   WebGLRenderer,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { SHIRT_CALIBRATION, SHIRT_MODEL_URL } from '@/lib/mirror/constants';
+import {
+  JERSEY_FRONT_MODEL_URL,
+  JERSEY_SLEEVES_MODEL_URL,
+  SHIRT_CALIBRATION,
+  SLEEVE_CALIBRATION,
+} from '@/lib/mirror/constants';
 import { smoothQuaternion, smoothVector3 } from '@/lib/mirror/pose/smoothing';
-import type { ShirtCalibration, SleeveTransform, StageSize, TorsoTransform } from '@/lib/mirror/types';
+import type {
+  ShirtCalibration,
+  SleeveCalibration,
+  SleeveTransform,
+  StageSize,
+  TorsoTransform,
+} from '@/lib/mirror/types';
 import { createProxyShirtGroup } from '@/lib/mirror/three/proxy-shirt';
 import { createProxySleeveGroup } from '@/lib/mirror/three/proxy-sleeve';
 
@@ -30,16 +43,23 @@ export class ShirtSceneController {
   private readonly camera: OrthographicCamera;
   private readonly shirtAnchor: Group;
   private readonly calibration: ShirtCalibration;
+  private readonly sleeveCalibration: SleeveCalibration;
   private stageSize: StageSize = { width: 1, height: 1 };
   private modelRoot: Object3D | null = null;
   private modelSize = new Vector3(1, 1, 1);
   private currentPosition = new Vector3();
   private currentScale = new Vector3(1, 1, 1);
   private currentRotation = new Quaternion();
+  private jerseyOpacity = 1;
   private calibrationQuaternion = new Quaternion();
+  private sleeveCalibrationQuaternion = new Quaternion();
 
   private readonly leftSleeveAnchor: Group;
   private readonly rightSleeveAnchor: Group;
+  private leftSleeveModelRoot: Object3D | null = null;
+  private rightSleeveModelRoot: Object3D | null = null;
+  private leftSleeveModelSize = new Vector3(1, 1, 1);
+  private rightSleeveModelSize = new Vector3(1, 1, 1);
   private leftSleevePosition = new Vector3();
   private leftSleeveScale = new Vector3(1, 1, 1);
   private leftSleeveRotation = new Quaternion();
@@ -47,8 +67,12 @@ export class ShirtSceneController {
   private rightSleeveScale = new Vector3(1, 1, 1);
   private rightSleeveRotation = new Quaternion();
 
-  constructor(calibration: ShirtCalibration = SHIRT_CALIBRATION) {
+  constructor(
+    calibration: ShirtCalibration = SHIRT_CALIBRATION,
+    sleeveCalibration: SleeveCalibration = SLEEVE_CALIBRATION
+  ) {
     this.calibration = calibration;
+    this.sleeveCalibration = sleeveCalibration;
     this.renderer = new WebGLRenderer({
       alpha: true,
       antialias: true,
@@ -65,11 +89,9 @@ export class ShirtSceneController {
 
     this.leftSleeveAnchor = new Group();
     this.leftSleeveAnchor.visible = false;
-    this.leftSleeveAnchor.add(createProxySleeveGroup());
 
     this.rightSleeveAnchor = new Group();
     this.rightSleeveAnchor.visible = false;
-    this.rightSleeveAnchor.add(createProxySleeveGroup());
 
     const ambient = new AmbientLight(0xffffff, 1.15);
     const keyLight = new DirectionalLight(0xffffff, 0.65);
@@ -78,6 +100,13 @@ export class ShirtSceneController {
     this.scene.add(ambient, keyLight, this.shirtAnchor, this.leftSleeveAnchor, this.rightSleeveAnchor);
     this.calibrationQuaternion.setFromEuler(
       new Euler(calibration.baseRotation.x, calibration.baseRotation.y, calibration.baseRotation.z)
+    );
+    this.sleeveCalibrationQuaternion.setFromEuler(
+      new Euler(
+        sleeveCalibration.baseRotation.x,
+        sleeveCalibration.baseRotation.y,
+        sleeveCalibration.baseRotation.z
+      )
     );
   }
 
@@ -88,24 +117,37 @@ export class ShirtSceneController {
   async loadShirtModel() {
     const manager = new LoadingManager();
     const loader = new GLTFLoader(manager);
+    const fallbackMessages: string[] = [];
 
     try {
-      const gltf = await loader.loadAsync(SHIRT_MODEL_URL);
-      this.attachModel(gltf.scene);
-      return {
-        errorMessage: null,
-        usedFallback: false,
-      } satisfies ShirtSceneLoadResult;
+      const jerseyFront = await loader.loadAsync(JERSEY_FRONT_MODEL_URL);
+      this.attachTorsoModel(selectTorsoModel(jerseyFront.scene));
     } catch (error) {
-      this.attachModel(createProxyShirtGroup());
-      return {
-        errorMessage:
-          error instanceof Error
-            ? `${error.message} Using proxy shirt geometry instead.`
-            : 'Could not load shirt model. Using proxy shirt geometry instead.',
-        usedFallback: true,
-      } satisfies ShirtSceneLoadResult;
+      this.attachTorsoModel(createProxyShirtGroup());
+      fallbackMessages.push(
+        error instanceof Error
+          ? `${error.message} Using proxy jersey body instead.`
+          : 'Could not load the jersey body model. Using proxy jersey body instead.'
+      );
     }
+
+    try {
+      const jerseySleeves = await loader.loadAsync(JERSEY_SLEEVES_MODEL_URL);
+      const { leftSleeve, rightSleeve } = selectSleeveModels(jerseySleeves.scene);
+      this.attachSleeveModels(rightSleeve, leftSleeve);
+    } catch (error) {
+      this.attachSleeveModels(createProxySleeveGroup(), createProxySleeveGroup());
+      fallbackMessages.push(
+        error instanceof Error
+          ? `${error.message} Using proxy sleeves instead.`
+          : 'Could not load the sleeve model. Using proxy sleeves instead.'
+      );
+    }
+
+    return {
+      errorMessage: fallbackMessages.length > 0 ? fallbackMessages.join(' ') : null,
+      usedFallback: fallbackMessages.length > 0,
+    } satisfies ShirtSceneLoadResult;
   }
 
   resize(stageSize: StageSize) {
@@ -118,6 +160,11 @@ export class ShirtSceneController {
 
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setSize(stageSize.width, stageSize.height, false);
+  }
+
+  setJerseyOpacity(opacity: number) {
+    this.jerseyOpacity = opacity;
+    this.applyJerseyOpacity();
   }
 
   updateShirtTransform(transform: TorsoTransform | null) {
@@ -182,13 +229,15 @@ export class ShirtSceneController {
     const targetPosition = new Vector3(
       this.stageSize.width / 2 - sleeve.center.x,
       this.stageSize.height / 2 - sleeve.center.y,
-      this.shirtAnchor.position.z
+      this.shirtAnchor.position.z + this.sleeveCalibration.zOffset
     );
 
+    const modelSize = side === 'left' ? this.leftSleeveModelSize : this.rightSleeveModelSize;
+    const sleeveWidth = (sleeve.shoulderWidthPx + sleeve.elbowWidthPx) / 2;
     const targetScale = new Vector3(
-      sleeve.shoulderWidthPx,
-      sleeve.lengthPx,
-      sleeve.elbowWidthPx
+      (sleeveWidth / Math.max(modelSize.x, 0.001)) * this.sleeveCalibration.scaleX,
+      (sleeve.lengthPx / Math.max(modelSize.y, 0.001)) * this.sleeveCalibration.scaleY,
+      (sleeveWidth / Math.max(modelSize.z, 0.001)) * this.sleeveCalibration.scaleZ
     );
 
     const targetRotation = new Quaternion().copy(sleeve.rotation);
@@ -210,9 +259,77 @@ export class ShirtSceneController {
     }
   }
 
-  private attachModel(nextModel: Object3D) {
-    if (this.modelRoot) {
-      this.shirtAnchor.remove(this.modelRoot);
+  private attachTorsoModel(nextModel: Object3D) {
+    const { modelRoot, size } = this.replaceAnchorModel(
+      this.shirtAnchor,
+      this.modelRoot,
+      nextModel,
+      this.calibrationQuaternion
+    );
+
+    this.modelRoot = modelRoot;
+    this.modelSize = size;
+    this.currentScale.set(1, 1, 1);
+    this.currentPosition.set(0, 0, 0);
+    this.currentRotation.identity();
+    this.applyJerseyOpacity();
+  }
+
+  private applyJerseyOpacity() {
+    if (!this.modelRoot) {
+      return;
+    }
+
+    this.modelRoot.traverse((node) => {
+      if (!isMeshObject(node)) {
+        return;
+      }
+
+      if (Array.isArray(node.material)) {
+        node.material.forEach((material) => applyOpacityToMaterial(material, this.jerseyOpacity));
+        return;
+      }
+
+      if (node.material) {
+        applyOpacityToMaterial(node.material, this.jerseyOpacity);
+      }
+    });
+  }
+
+  private attachSleeveModels(leftSleeve: Object3D, rightSleeve: Object3D) {
+    const leftAttachment = this.replaceAnchorModel(
+      this.leftSleeveAnchor,
+      this.leftSleeveModelRoot,
+      leftSleeve,
+      this.sleeveCalibrationQuaternion
+    );
+    const rightAttachment = this.replaceAnchorModel(
+      this.rightSleeveAnchor,
+      this.rightSleeveModelRoot,
+      rightSleeve,
+      this.sleeveCalibrationQuaternion
+    );
+
+    this.leftSleeveModelRoot = leftAttachment.modelRoot;
+    this.leftSleeveModelSize = leftAttachment.size;
+    this.rightSleeveModelRoot = rightAttachment.modelRoot;
+    this.rightSleeveModelSize = rightAttachment.size;
+    this.leftSleevePosition.set(0, 0, 0);
+    this.leftSleeveScale.set(1, 1, 1);
+    this.leftSleeveRotation.identity();
+    this.rightSleevePosition.set(0, 0, 0);
+    this.rightSleeveScale.set(1, 1, 1);
+    this.rightSleeveRotation.identity();
+  }
+
+  private replaceAnchorModel(
+    anchor: Group,
+    currentModelRoot: Object3D | null,
+    nextModel: Object3D,
+    baseQuaternion: Quaternion
+  ) {
+    if (currentModelRoot) {
+      anchor.remove(currentModelRoot);
     }
 
     const modelContainer = new Group();
@@ -222,18 +339,86 @@ export class ShirtSceneController {
     const center = box.getCenter(new Vector3());
     const size = box.getSize(new Vector3());
     nextModel.position.sub(center);
-    modelContainer.quaternion.copy(this.calibrationQuaternion);
+    modelContainer.quaternion.copy(baseQuaternion);
+    anchor.add(modelContainer);
 
-    this.modelRoot = modelContainer;
-    this.modelSize = new Vector3(
-      Math.max(size.x, 0.001),
-      Math.max(size.y, 0.001),
-      Math.max(size.z, 0.001)
-    );
-
-    this.currentScale.set(1, 1, 1);
-    this.currentPosition.set(0, 0, 0);
-    this.currentRotation.identity();
-    this.shirtAnchor.add(modelContainer);
+    return {
+      modelRoot: modelContainer,
+      size: new Vector3(
+        Math.max(size.x, 0.001),
+        Math.max(size.y, 0.001),
+        Math.max(size.z, 0.001)
+      ),
+    };
   }
+}
+
+function applyOpacityToMaterial(material: Material, opacity: number) {
+  const candidate = material as Material & { opacity?: number; transparent?: boolean };
+  candidate.opacity = opacity;
+  candidate.transparent = opacity < 0.999;
+  material.needsUpdate = true;
+}
+
+function isMeshObject(node: Object3D): node is Mesh {
+  return (node as Mesh).isMesh === true;
+}
+
+function cloneWorldSpaceNode(node: Object3D) {
+  node.updateWorldMatrix(true, false);
+  const clone = node.clone(true);
+  clone.position.set(0, 0, 0);
+  clone.quaternion.identity();
+  clone.scale.set(1, 1, 1);
+  clone.applyMatrix4(node.matrixWorld);
+  return clone;
+}
+
+function collectRenderableParts(root: Object3D) {
+  const parts: Array<{ center: Vector3; node: Object3D }> = [];
+  root.updateWorldMatrix(true, true);
+
+  root.traverse((child) => {
+    const renderableChild = child as Object3D & {
+      geometry?: object;
+      isMesh?: boolean;
+      isSkinnedMesh?: boolean;
+    };
+    if (!renderableChild.geometry || (!renderableChild.isMesh && !renderableChild.isSkinnedMesh)) {
+      return;
+    }
+
+    const box = new Box3().setFromObject(child);
+    if (box.isEmpty()) {
+      return;
+    }
+
+    const center = box.getCenter(new Vector3());
+    parts.push({
+      center,
+      node: cloneWorldSpaceNode(child),
+    });
+  });
+
+  return parts;
+}
+
+function selectTorsoModel(root: Object3D) {
+  const parts = collectRenderableParts(root).sort(
+    (first, second) => Math.abs(first.center.x) - Math.abs(second.center.x)
+  );
+
+  return parts[0]?.node ?? root.clone(true);
+}
+
+function selectSleeveModels(root: Object3D) {
+  const parts = collectRenderableParts(root).sort((first, second) => first.center.x - second.center.x);
+  const leftSleeve = parts[0]?.node ?? createProxySleeveGroup();
+  const rightSleeveSource = parts[parts.length - 1]?.node ?? createProxySleeveGroup();
+  const rightSleeve = rightSleeveSource === leftSleeve ? rightSleeveSource.clone(true) : rightSleeveSource;
+
+  return {
+    leftSleeve,
+    rightSleeve,
+  };
 }

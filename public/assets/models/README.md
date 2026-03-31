@@ -1,4 +1,7 @@
-Place the final Hisense shirt asset at `public/assets/models/hisense-shirt.glb`.
+Primary runtime assets:
 
-The MVP currently falls back to a procedural shirt proxy when this file is missing so the mirror
-can still be calibrated and tested.
+- `public/assets/models/hisense-jersey-front.glb` for the torso mesh
+- `public/assets/models/hisense-jersey-sleeves.glb` for the sleeve meshes
+
+The MVP still falls back to procedural proxy geometry when either runtime asset is missing so the
+mirror can still be calibrated and tested.

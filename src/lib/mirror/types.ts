@@ -134,3 +134,15 @@ export interface ShirtCalibration {
     z: number;
   };
 }
+
+export interface SleeveCalibration {
+  scaleX: number;
+  scaleY: number;
+  scaleZ: number;
+  zOffset: number;
+  baseRotation: {
+    x: number;
+    y: number;
+    z: number;
+  };
+}

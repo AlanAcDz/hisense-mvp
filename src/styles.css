@@ -25,6 +25,8 @@ body,
 
 body {
   min-height: 100vh;
+  background: #000;
+  overflow: hidden;
 }
 
 button,
