@@ -202,7 +202,18 @@ export function resolveBackgroundMatte({
   staleAfterMs = BACKGROUND_MASK_STALE_MS,
   minCoverage = BACKGROUND_MASK_MIN_COVERAGE,
 }: ResolveBackgroundMatteOptions): BackgroundMatteResolution {
-  if (segmentationFrame) {
+  const hasFreshSegmentationFrame =
+    Boolean(segmentationFrame) &&
+    now - (segmentationFrame?.timestamp ?? 0) <= staleAfterMs;
+
+  if (hasFreshSegmentationFrame && segmentationFrame) {
+    if (previousMatte && previousMatte.timestamp === segmentationFrame.timestamp) {
+      return {
+        matte: previousMatte,
+        reusedPrevious: false,
+      };
+    }
+
     const nextMatte = createBackgroundMatte(segmentationFrame);
     if (nextMatte.coverage >= minCoverage) {
       return {

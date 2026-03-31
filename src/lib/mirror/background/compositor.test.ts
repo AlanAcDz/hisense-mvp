@@ -83,6 +83,34 @@ describe('background compositor', () => {
     expect(result.reusedPrevious).toBe(true);
   });
 
+  it('reuses the existing matte when the segmentation timestamp has not changed', () => {
+    const alpha = new Float32Array(60 * 60).fill(1);
+    const previousMatte = createBackgroundMatte(createSegmentationFrame(60, 60, alpha, 1000));
+
+    const result = resolveBackgroundMatte({
+      segmentationFrame: createSegmentationFrame(60, 60, alpha, 1000),
+      previousMatte,
+      now: 1020,
+    });
+
+    expect(result.matte).toBe(previousMatte);
+    expect(result.reusedPrevious).toBe(false);
+  });
+
+  it('drops an old segmentation frame instead of treating it as fresh input forever', () => {
+    const alpha = new Float32Array(60 * 60).fill(1);
+    const previousMatte = createBackgroundMatte(createSegmentationFrame(60, 60, alpha, 1000));
+
+    const result = resolveBackgroundMatte({
+      segmentationFrame: createSegmentationFrame(60, 60, alpha, 1000),
+      previousMatte,
+      now: 1200,
+    });
+
+    expect(result.matte).toBeNull();
+    expect(result.reusedPrevious).toBe(false);
+  });
+
   it('drops a stale cached matte after the reuse window expires', () => {
     const previousMatte: BackgroundMatte = {
       width: 3,

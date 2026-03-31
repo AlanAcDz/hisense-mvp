@@ -117,6 +117,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   const sceneControllerRef = useRef<ShirtSceneControllerRuntime | null>(null);
   const backgroundImageRef = useRef<HTMLImageElement | null>(null);
   const matteCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const syncedMatteTimestampRef = useRef<number | null>(null);
   const lastGoodMatteRef = useRef<ReturnType<typeof resolveBackgroundMatte>['matte']>(null);
   const [sceneState, setSceneState] = useState<MirrorSceneState>({
     cameraError: null,
@@ -393,7 +394,15 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
           matteCanvasRef.current = document.createElement('canvas');
         }
 
-        syncMatteCanvas(matteCanvasRef.current, nextMatte);
+        if (
+          syncedMatteTimestampRef.current !== nextMatte.timestamp ||
+          matteCanvasRef.current.width !== nextMatte.width ||
+          matteCanvasRef.current.height !== nextMatte.height
+        ) {
+          syncMatteCanvas(matteCanvasRef.current, nextMatte);
+          syncedMatteTimestampRef.current = nextMatte.timestamp;
+        }
+
         drawBackgroundLayer(currentBackgroundContext, stageSize, backgroundImageRef.current);
         drawForegroundLayer({
           ctx: currentForegroundContext,

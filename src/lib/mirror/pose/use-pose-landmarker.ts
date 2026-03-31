@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
-import { DETECTION_INTERVAL_MS, POSE_CONFIDENCE } from '@/lib/mirror/constants';
+import {
+  DETECTION_INPUT_LONG_EDGE_PX,
+  DETECTION_INTERVAL_MS,
+  POSE_CONFIDENCE,
+} from '@/lib/mirror/constants';
 import { createPoseFrame } from '@/lib/mirror/pose/torso';
 import type {
   LandmarkerFrame,
@@ -80,17 +84,24 @@ function copySegmentationFrame(
   };
 }
 
+function getDetectionScale(videoWidth: number, videoHeight: number) {
+  const longEdge = Math.max(videoWidth, videoHeight);
+  if (!longEdge || longEdge <= DETECTION_INPUT_LONG_EDGE_PX) {
+    return 1;
+  }
+
+  return DETECTION_INPUT_LONG_EDGE_PX / longEdge;
+}
+
 export function usePoseLandmarker() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [frame, setFrame] = useState<LandmarkerFrame>({
-    poseFrame: null,
-    segmentationFrame: null,
-  });
   const frameRef = useRef<LandmarkerFrame>({
     poseFrame: null,
     segmentationFrame: null,
   });
+  const detectionCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const detectionCanvasContextRef = useRef<CanvasRenderingContext2D | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,28 +147,57 @@ export function usePoseLandmarker() {
       lastDetectedAtRef.current = now;
 
       try {
-        const result = poseLandmarkerInstance.detectForVideo(videoElement, now);
-        const nextPoseFrame = createPoseFrame(
-          mapPoseLandmarks(result.landmarks[0] as PoseLandmark2D[] | undefined),
-          mapWorldLandmarks(result.worldLandmarks[0] as PoseLandmark3D[] | undefined),
-          now
-        );
-        const nextSegmentationFrame = copySegmentationFrame(
-          result.segmentationMasks as
-            | { width: number; height: number; getAsFloat32Array(): Float32Array }[]
-            | undefined,
-          now
-        );
+        const detectionScale = getDetectionScale(videoElement.videoWidth, videoElement.videoHeight);
+        let detectionSource: CanvasImageSource = videoElement;
 
-        result.close();
+        if (detectionScale < 1) {
+          const detectionWidth = Math.max(1, Math.round(videoElement.videoWidth * detectionScale));
+          const detectionHeight = Math.max(1, Math.round(videoElement.videoHeight * detectionScale));
 
-        const nextFrame = {
-          poseFrame: nextPoseFrame,
-          segmentationFrame: nextSegmentationFrame,
-        } satisfies LandmarkerFrame;
+          if (!detectionCanvasRef.current) {
+            detectionCanvasRef.current = document.createElement('canvas');
+          }
+
+          const detectionCanvas = detectionCanvasRef.current;
+          if (detectionCanvas.width !== detectionWidth || detectionCanvas.height !== detectionHeight) {
+            detectionCanvas.width = detectionWidth;
+            detectionCanvas.height = detectionHeight;
+            detectionCanvasContextRef.current = null;
+          }
+
+          let detectionContext = detectionCanvasContextRef.current;
+          if (!detectionContext) {
+            detectionContext =
+              detectionCanvas.getContext('2d', { alpha: false, desynchronized: true }) ??
+              detectionCanvas.getContext('2d');
+            detectionCanvasContextRef.current = detectionContext;
+          }
+
+          if (detectionContext) {
+            detectionContext.drawImage(videoElement, 0, 0, detectionWidth, detectionHeight);
+            detectionSource = detectionCanvas;
+          }
+        }
+
+        let nextFrame = frameRef.current;
+
+        poseLandmarkerInstance.detectForVideo(detectionSource, now, (result) => {
+          nextFrame = {
+            poseFrame: createPoseFrame(
+              mapPoseLandmarks(result.landmarks[0] as PoseLandmark2D[] | undefined),
+              mapWorldLandmarks(result.worldLandmarks[0] as PoseLandmark3D[] | undefined),
+              now
+            ),
+            segmentationFrame: copySegmentationFrame(
+              result.segmentationMasks as
+                | { width: number; height: number; getAsFloat32Array(): Float32Array }[]
+                | undefined,
+              now
+            ),
+          } satisfies LandmarkerFrame;
+        });
 
         frameRef.current = nextFrame;
-        setFrame(nextFrame);
         return nextFrame;
       } catch (detectError) {
         const message =
@@ -172,7 +212,6 @@ export function usePoseLandmarker() {
   return {
     detectFrame,
     error,
-    frame,
     isLoading,
   };
 }
