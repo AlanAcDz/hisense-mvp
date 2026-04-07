@@ -7,6 +7,17 @@ import {
 } from '@/lib/mirror/pose/torso';
 import type { PoseLandmark2D, PoseLandmark3D } from '@/lib/mirror/types';
 
+const NEUTRAL_SLEEVE_CALIBRATION = {
+  scaleX: 1,
+  scaleY: 1,
+  scaleZ: 1,
+  xOffset: 0,
+  yOffset: 0,
+  lineOffset: 0,
+  zOffset: 0,
+  baseRotation: { x: 0, y: 0, z: 0 },
+} as const;
+
 function buildNormalizedLandmarks(visibility = 0.98) {
   const landmarks = Array.from({ length: 33 }, () => ({
     x: 0.5,
@@ -109,7 +120,8 @@ describe('torso transform', () => {
       poseFrame?.leftArm ?? null,
       torsoTransform!,
       stageSize,
-      coverLayout
+      coverLayout,
+      NEUTRAL_SLEEVE_CALIBRATION
     );
     const expectedShoulder = { x: stageSize.width * 0.4, y: stageSize.height * 0.3 };
     const expectedElbow = { x: stageSize.width * 0.3, y: stageSize.height * 0.47 };
@@ -117,37 +129,74 @@ describe('torso transform', () => {
       expectedElbow.x - expectedShoulder.x,
       expectedElbow.y - expectedShoulder.y
     );
-    const expectedArmNormal = {
-      x: -(expectedElbow.y - expectedShoulder.y) / expectedArmLength,
-      y: (expectedElbow.x - expectedShoulder.x) / expectedArmLength,
-    };
-    const expectedShoulderLift =
-      expectedArmNormal.y < 0
-        ? {
-            x: -expectedArmNormal.x,
-            y: -expectedArmNormal.y,
-          }
-        : expectedArmNormal;
-    const expectedShoulderLiftPx = Math.max(torsoTransform!.widthPx * 0.08, expectedArmLength * 0.1);
+    const expectedSleeveAnchorRatio = 0.24;
 
     expect(sleeveTransform).not.toBeNull();
     expect(sleeveTransform?.lengthPx).toBeCloseTo(expectedArmLength * 0.64, 4);
     expect(sleeveTransform?.center.x).toBeCloseTo(
-      expectedShoulder.x +
-        (expectedElbow.x - expectedShoulder.x) * 0.5 +
-        expectedShoulderLift.x * expectedShoulderLiftPx,
+      expectedShoulder.x + (expectedElbow.x - expectedShoulder.x) * expectedSleeveAnchorRatio,
       4
     );
     expect(sleeveTransform?.center.y).toBeCloseTo(
-      expectedShoulder.y +
-        (expectedElbow.y - expectedShoulder.y) * 0.5 +
-        expectedShoulderLift.y * expectedShoulderLiftPx,
+      expectedShoulder.y + (expectedElbow.y - expectedShoulder.y) * expectedSleeveAnchorRatio,
       4
     );
     expect(sleeveTransform?.shoulderWidthPx).toBeGreaterThan(torsoTransform!.widthPx * 0.27);
     expect(sleeveTransform?.elbowWidthPx).toBeGreaterThan(expectedArmLength * 0.16);
-    expect(sleeveTransform!.center.y).toBeGreaterThan(
-      expectedShoulder.y + (expectedElbow.y - expectedShoulder.y) * 0.5
+  });
+
+  it('keeps raised-arm sleeves anchored on the arm segment instead of drifting off-line', () => {
+    const normalizedLandmarks = buildNormalizedLandmarks();
+    normalizedLandmarks[11] = { x: 0.35, y: 0.38, z: 0, visibility: 0.98 };
+    normalizedLandmarks[13] = { x: 0.15, y: 0.38, z: 0, visibility: 0.98 };
+    const poseFrame = createPoseFrame(normalizedLandmarks, buildWorldLandmarks(), 1000);
+    const stageSize = { width: 1280, height: 720 };
+    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
+    const torsoTransform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
+
+    expect(torsoTransform).not.toBeNull();
+
+    const sleeveTransform = computeSleeveTransform(
+      poseFrame?.leftArm ?? null,
+      torsoTransform!,
+      stageSize,
+      coverLayout,
+      NEUTRAL_SLEEVE_CALIBRATION
     );
+    const expectedShoulder = { x: stageSize.width * 0.35, y: stageSize.height * 0.38 };
+    const expectedElbow = { x: stageSize.width * 0.15, y: stageSize.height * 0.38 };
+
+    expect(sleeveTransform).not.toBeNull();
+    expect(sleeveTransform?.center.x).toBeCloseTo(
+      expectedShoulder.x + (expectedElbow.x - expectedShoulder.x) * 0.24,
+      4
+    );
+    expect(sleeveTransform?.center.y).toBeCloseTo(expectedShoulder.y, 4);
+  });
+
+  it('fades upward sleeve lift when the arm is horizontal', () => {
+    const normalizedLandmarks = buildNormalizedLandmarks();
+    normalizedLandmarks[11] = { x: 0.35, y: 0.38, z: 0, visibility: 0.98 };
+    normalizedLandmarks[13] = { x: 0.15, y: 0.38, z: 0, visibility: 0.98 };
+    const poseFrame = createPoseFrame(normalizedLandmarks, buildWorldLandmarks(), 1000);
+    const stageSize = { width: 1280, height: 720 };
+    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
+    const torsoTransform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
+
+    expect(torsoTransform).not.toBeNull();
+
+    const sleeveTransform = computeSleeveTransform(
+      poseFrame?.leftArm ?? null,
+      torsoTransform!,
+      stageSize,
+      coverLayout,
+      {
+        ...NEUTRAL_SLEEVE_CALIBRATION,
+        yOffset: 1,
+      }
+    );
+
+    expect(sleeveTransform).not.toBeNull();
+    expect(sleeveTransform?.center.y).toBeCloseTo(stageSize.height * 0.38, 4);
   });
 });

@@ -58,6 +58,7 @@ export const SLEEVE_CALIBRATION: SleeveCalibration = {
   scaleZ: 1.3190625,
   xOffset: 0.2,
   yOffset: 0.9,
+  lineOffset: -0.16,
   zOffset: 14,
   baseRotation: {
     x: Math.PI,

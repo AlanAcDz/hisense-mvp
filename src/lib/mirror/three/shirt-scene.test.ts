@@ -112,14 +112,15 @@ describe('ShirtSceneController', () => {
     expect(torsoModelRoot?.quaternion.angleTo(expectedRotation)).toBeLessThan(1e-6);
   });
 
-  it('applies the sleeve y offset as an upward screen-space lift', async () => {
+  it('positions sleeves directly from the computed sleeve center', async () => {
     const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
     const controller = new ShirtSceneController(undefined, {
       scaleX: 1,
       scaleY: 1,
       scaleZ: 1,
-      xOffset: 0,
-      yOffset: 0.34,
+      xOffset: 0.4,
+      yOffset: 0.7,
+      lineOffset: 0,
       zOffset: 0,
       baseRotation: { x: 0, y: 0, z: 0 },
     });
@@ -127,7 +128,7 @@ describe('ShirtSceneController', () => {
     controller.resize({ width: 200, height: 200 });
     controller.updateSleeves(
       {
-        center: { x: 100, y: 100 },
+        center: { x: 80, y: 120 },
         lengthPx: 80,
         shoulderWidthPx: 60,
         elbowWidthPx: 50,
@@ -138,10 +139,11 @@ describe('ShirtSceneController', () => {
 
     const leftSleeveAnchor = (controller as any).leftSleeveAnchor as Group;
 
-    expect(leftSleeveAnchor.position.y).toBeCloseTo(12.16, 2);
+    expect(leftSleeveAnchor.position.x).toBeCloseTo(13, 4);
+    expect(leftSleeveAnchor.position.y).toBeCloseTo(-13, 4);
   });
 
-  it('uses the default sleeve calibration for larger sleeves and a higher lift', async () => {
+  it('uses the default sleeve calibration for scale without extra screen-space drift', async () => {
     const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
     const controller = new ShirtSceneController();
 
@@ -163,8 +165,8 @@ describe('ShirtSceneController', () => {
     const expectedScaleY = 1 + (80 * SLEEVE_CALIBRATION.scaleY - 1) * 0.6;
     const expectedScaleZ = 1 + (sleeveWidth * SLEEVE_CALIBRATION.scaleZ - 1) * 0.6;
 
-    expect(leftSleeveAnchor.position.x).toBeCloseTo(-7.15, 2);
-    expect(leftSleeveAnchor.position.y).toBeCloseTo(32.18, 2);
+    expect(leftSleeveAnchor.position.x).toBeCloseTo(0, 4);
+    expect(leftSleeveAnchor.position.y).toBeCloseTo(0, 4);
     expect(leftSleeveAnchor.scale.x).toBeCloseTo(expectedScaleX, 4);
     expect(leftSleeveAnchor.scale.y).toBeCloseTo(expectedScaleY, 4);
     expect(leftSleeveAnchor.scale.z).toBeCloseTo(expectedScaleZ, 4);

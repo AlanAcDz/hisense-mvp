@@ -1,6 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import {
   LANDMARK_INDICES,
+  SLEEVE_CALIBRATION,
   SHIRT_CALIBRATION,
   TORSO_VISIBILITY_THRESHOLD,
 } from '@/lib/mirror/constants';
@@ -12,6 +13,7 @@ import type {
   PoseLandmark2D,
   PoseLandmark3D,
   ShirtCalibration,
+  SleeveCalibration,
   SleeveTransform,
   StageSize,
   TorsoLandmarks,
@@ -245,7 +247,8 @@ export function computeSleeveTransform(
   arm: ArmLandmarks | null,
   torsoTransform: TorsoTransform,
   stageSize: StageSize,
-  coverLayout: CoverLayout
+  coverLayout: CoverLayout,
+  calibration: SleeveCalibration = SLEEVE_CALIBRATION
 ): SleeveTransform | null {
   if (!arm || arm.minimumVisibility < TORSO_VISIBILITY_THRESHOLD) {
     return null;
@@ -258,38 +261,42 @@ export function computeSleeveTransform(
     y: elbowStage.y - shoulderStage.y,
   };
   const armLengthPx = distance2D(shoulderStage, elbowStage);
-  const armNormal = {
-    x: -armVector.y / Math.max(armLengthPx, 0.001),
-    y: armVector.x / Math.max(armLengthPx, 0.001),
+  const armDirection = {
+    x: armVector.x / Math.max(armLengthPx, 0.001),
+    y: armVector.y / Math.max(armLengthPx, 0.001),
   };
-  const shoulderLiftNormal =
-    armNormal.y < 0
+  const sleeveAnchorRatio = 0.24;
+  const shoulderWidthPx = Math.max(torsoTransform.widthPx * 0.34, armLengthPx * 0.24);
+  const elbowWidthPx = Math.max(shoulderWidthPx * 0.94, armLengthPx * 0.22);
+  const sleeveWidthPx = (shoulderWidthPx + elbowWidthPx) / 2;
+  const torsoToShoulder = {
+    x: shoulderStage.x - torsoTransform.center.x,
+    y: shoulderStage.y - torsoTransform.center.y,
+  };
+  const torsoToShoulderLength = Math.hypot(torsoToShoulder.x, torsoToShoulder.y);
+  const outwardDirection =
+    torsoToShoulderLength > 0.001
       ? {
-          x: -armNormal.x,
-          y: -armNormal.y,
+          x: torsoToShoulder.x / torsoToShoulderLength,
+          y: torsoToShoulder.y / torsoToShoulderLength,
         }
-      : armNormal;
-  const shoulderLiftPx = Math.max(torsoTransform.widthPx * 0.08, armLengthPx * 0.1);
+      : { x: 0, y: 0 };
+  const upwardLiftWeight = Math.max(0, 1 - Math.abs(armDirection.x));
 
   const center = {
-    x: shoulderStage.x + armVector.x * 0.5 + shoulderLiftNormal.x * shoulderLiftPx,
-    y: shoulderStage.y + armVector.y * 0.5 + shoulderLiftNormal.y * shoulderLiftPx,
+    x:
+      shoulderStage.x +
+      armVector.x * sleeveAnchorRatio +
+      outwardDirection.x * sleeveWidthPx * calibration.xOffset,
+    y:
+      shoulderStage.y +
+      armVector.y * sleeveAnchorRatio +
+      outwardDirection.y * sleeveWidthPx * calibration.xOffset -
+      sleeveWidthPx * calibration.yOffset * upwardLiftWeight * 0.5,
   };
 
   const lengthPx = armLengthPx * 0.64;
-  const shoulderWidthPx = Math.max(torsoTransform.widthPx * 0.34, armLengthPx * 0.24);
-  const elbowWidthPx = Math.max(shoulderWidthPx * 0.94, armLengthPx * 0.22);
-
-  const shoulderThree = {
-    x: stageSize.width / 2 - shoulderStage.x,
-    y: stageSize.height / 2 - shoulderStage.y,
-  };
-
-  const shoulderDir = new Vector3(
-    stageSize.width / 2 - center.x - shoulderThree.x,
-    stageSize.height / 2 - center.y - shoulderThree.y,
-    0
-  ).normalize();
+  const shoulderDir = new Vector3(-armDirection.x, -armDirection.y, 0).normalize();
 
   const cylinderUp = new Vector3(0, 1, 0);
   const rotation = new Quaternion().setFromUnitVectors(cylinderUp, shoulderDir);

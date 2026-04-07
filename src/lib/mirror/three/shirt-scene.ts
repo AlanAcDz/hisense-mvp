@@ -228,12 +228,9 @@ export class ShirtSceneController {
 
     const modelSize = side === 'left' ? this.leftSleeveModelSize : this.rightSleeveModelSize;
     const sleeveWidth = (sleeve.shoulderWidthPx + sleeve.elbowWidthPx) / 2;
-    const horizontalDirection = side === 'left' ? -1 : 1;
     const targetPosition = new Vector3(
-      this.stageSize.width / 2 -
-        sleeve.center.x +
-        sleeveWidth * this.sleeveCalibration.xOffset * horizontalDirection,
-      this.stageSize.height / 2 - sleeve.center.y + sleeveWidth * this.sleeveCalibration.yOffset,
+      this.stageSize.width / 2 - sleeve.center.x,
+      this.stageSize.height / 2 - sleeve.center.y,
       this.shirtAnchor.position.z + this.sleeveCalibration.zOffset
     );
     const targetScale = new Vector3(
@@ -303,13 +300,17 @@ export class ShirtSceneController {
       this.leftSleeveAnchor,
       this.leftSleeveModelRoot,
       leftSleeve,
-      this.sleeveCalibrationQuaternion
+      this.sleeveCalibrationQuaternion,
+      new Vector3(1, 0, 0),
+      this.sleeveCalibration.lineOffset
     );
     const rightAttachment = this.replaceAnchorModel(
       this.rightSleeveAnchor,
       this.rightSleeveModelRoot,
       rightSleeve,
-      this.sleeveCalibrationQuaternion
+      this.sleeveCalibrationQuaternion,
+      new Vector3(-1, 0, 0),
+      this.sleeveCalibration.lineOffset
     );
 
     this.leftSleeveModelRoot = leftAttachment.modelRoot;
@@ -328,7 +329,9 @@ export class ShirtSceneController {
     anchor: Group,
     currentModelRoot: Object3D | null,
     nextModel: Object3D,
-    baseQuaternion: Quaternion
+    baseQuaternion: Quaternion,
+    localOffsetDirection: Vector3 | null = null,
+    localOffsetFactor = 0
   ) {
     if (currentModelRoot) {
       anchor.remove(currentModelRoot);
@@ -341,6 +344,18 @@ export class ShirtSceneController {
     const center = box.getCenter(new Vector3());
     const size = box.getSize(new Vector3());
     nextModel.position.sub(center);
+    if (localOffsetDirection && localOffsetFactor !== 0) {
+      const localOffset = localOffsetDirection
+        .clone()
+        .multiply(
+          new Vector3(
+            size.x * localOffsetFactor,
+            size.y * localOffsetFactor,
+            size.z * localOffsetFactor
+          )
+        );
+      nextModel.position.add(localOffset);
+    }
     modelContainer.quaternion.copy(baseQuaternion);
     anchor.add(modelContainer);
 
