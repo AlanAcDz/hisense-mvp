@@ -14,6 +14,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   JERSEY_FRONT_MODEL_URL,
@@ -116,12 +117,11 @@ export class ShirtSceneController {
 
   async loadShirtModel() {
     const manager = new LoadingManager();
-    const loader = new GLTFLoader(manager);
     const fallbackMessages: string[] = [];
 
     try {
-      const jerseyFront = await loader.loadAsync(JERSEY_FRONT_MODEL_URL);
-      this.attachTorsoModel(selectTorsoModel(jerseyFront.scene));
+      const jerseyFront = await loadModelAsset(JERSEY_FRONT_MODEL_URL, manager);
+      this.attachTorsoModel(selectTorsoModel(jerseyFront));
     } catch (error) {
       this.attachTorsoModel(createProxyShirtGroup());
       fallbackMessages.push(
@@ -132,8 +132,8 @@ export class ShirtSceneController {
     }
 
     try {
-      const jerseySleeves = await loader.loadAsync(JERSEY_SLEEVES_MODEL_URL);
-      const { leftSleeve, rightSleeve } = selectSleeveModels(jerseySleeves.scene);
+      const jerseySleeves = await loadModelAsset(JERSEY_SLEEVES_MODEL_URL, manager);
+      const { leftSleeve, rightSleeve } = selectSleeveModels(jerseySleeves);
       this.attachSleeveModels(rightSleeve, leftSleeve);
     } catch (error) {
       this.attachSleeveModels(createProxySleeveGroup(), createProxySleeveGroup());
@@ -228,8 +228,11 @@ export class ShirtSceneController {
 
     const modelSize = side === 'left' ? this.leftSleeveModelSize : this.rightSleeveModelSize;
     const sleeveWidth = (sleeve.shoulderWidthPx + sleeve.elbowWidthPx) / 2;
+    const horizontalDirection = side === 'left' ? -1 : 1;
     const targetPosition = new Vector3(
-      this.stageSize.width / 2 - sleeve.center.x,
+      this.stageSize.width / 2 -
+        sleeve.center.x +
+        sleeveWidth * this.sleeveCalibration.xOffset * horizontalDirection,
       this.stageSize.height / 2 - sleeve.center.y + sleeveWidth * this.sleeveCalibration.yOffset,
       this.shirtAnchor.position.z + this.sleeveCalibration.zOffset
     );
@@ -420,4 +423,32 @@ function selectSleeveModels(root: Object3D) {
     leftSleeve,
     rightSleeve,
   };
+}
+
+async function loadModelAsset(url: string, manager: LoadingManager) {
+  const extension = getModelExtension(url);
+
+  if (extension === 'fbx') {
+    const loader = new FBXLoader(manager);
+    return loader.loadAsync(url);
+  }
+
+  if (extension === 'glb' || extension === 'gltf') {
+    const loader = new GLTFLoader(manager);
+    const model = await loader.loadAsync(url);
+    return model.scene;
+  }
+
+  throw new Error(`Unsupported jersey model format ".${extension}" for ${url}`);
+}
+
+function getModelExtension(url: string) {
+  const normalizedUrl = url.split('?')[0]?.split('#')[0] ?? url;
+  const extension = normalizedUrl.split('.').pop()?.toLowerCase();
+
+  if (!extension) {
+    throw new Error(`Could not determine model format for ${url}`);
+  }
+
+  return extension;
 }

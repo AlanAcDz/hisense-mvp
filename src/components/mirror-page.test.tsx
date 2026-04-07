@@ -88,7 +88,7 @@ describe('MirrorPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /capture/i }));
 
     expect(screen.getByText(/using proxy sleeves instead/i)).toBeInTheDocument();
-    expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-jersey-opacity', '0.1');
+    expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-jersey-opacity', '0.35');
     expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-show-points', 'true');
     expect(captureSpy).toHaveBeenCalledTimes(1);
   });

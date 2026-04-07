@@ -30,6 +30,18 @@ vi.mock('three', async () => {
   };
 });
 
+vi.mock('three/examples/jsm/loaders/FBXLoader.js', () => {
+  class MockFBXLoader {
+    async loadAsync(url: string) {
+      return loaderLoadAsync(url);
+    }
+  }
+
+  return {
+    FBXLoader: MockFBXLoader,
+  };
+});
+
 vi.mock('three/examples/jsm/loaders/GLTFLoader.js', () => {
   class MockGLTFLoader {
     async loadAsync(url: string) {
@@ -56,18 +68,17 @@ describe('ShirtSceneController', () => {
     sleevesScene.add(createNamedMesh('left-sleeve', -20));
     sleevesScene.add(createNamedMesh('right-sleeve', 20));
 
-    loaderLoadAsync
-      .mockResolvedValueOnce({ scene: torsoScene })
-      .mockResolvedValueOnce({ scene: sleevesScene });
+    loaderLoadAsync.mockResolvedValueOnce(torsoScene).mockResolvedValueOnce(sleevesScene);
 
     const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
     const controller = new ShirtSceneController();
 
-    await controller.loadShirtModel();
+    const loadResult = await controller.loadShirtModel();
 
     const leftSleeveRoot = (controller as any).leftSleeveModelRoot as Group | null;
     const expectedRotation = new Quaternion().setFromEuler(new Euler(Math.PI, 0, 0));
 
+    expect(loadResult.usedFallback).toBe(false);
     expect(leftSleeveRoot).toBeTruthy();
     expect(leftSleeveRoot?.quaternion.angleTo(expectedRotation)).toBeLessThan(1e-6);
   });
@@ -80,14 +91,12 @@ describe('ShirtSceneController', () => {
     sleevesScene.add(createNamedMesh('left-sleeve', -20));
     sleevesScene.add(createNamedMesh('right-sleeve', 20));
 
-    loaderLoadAsync
-      .mockResolvedValueOnce({ scene: torsoScene })
-      .mockResolvedValueOnce({ scene: sleevesScene });
+    loaderLoadAsync.mockResolvedValueOnce(torsoScene).mockResolvedValueOnce(sleevesScene);
 
     const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
     const controller = new ShirtSceneController();
 
-    await controller.loadShirtModel();
+    const loadResult = await controller.loadShirtModel();
 
     const torsoModelRoot = (controller as any).modelRoot as Group | null;
     const expectedRotation = new Quaternion().setFromEuler(
@@ -98,6 +107,7 @@ describe('ShirtSceneController', () => {
       )
     );
 
+    expect(loadResult.usedFallback).toBe(false);
     expect(torsoModelRoot).toBeTruthy();
     expect(torsoModelRoot?.quaternion.angleTo(expectedRotation)).toBeLessThan(1e-6);
   });
@@ -108,6 +118,7 @@ describe('ShirtSceneController', () => {
       scaleX: 1,
       scaleY: 1,
       scaleZ: 1,
+      xOffset: 0,
       yOffset: 0.34,
       zOffset: 0,
       baseRotation: { x: 0, y: 0, z: 0 },
@@ -152,7 +163,8 @@ describe('ShirtSceneController', () => {
     const expectedScaleY = 1 + (80 * SLEEVE_CALIBRATION.scaleY - 1) * 0.6;
     const expectedScaleZ = 1 + (sleeveWidth * SLEEVE_CALIBRATION.scaleZ - 1) * 0.6;
 
-    expect(leftSleeveAnchor.position.y).toBeCloseTo(18.23, 2);
+    expect(leftSleeveAnchor.position.x).toBeCloseTo(-7.15, 2);
+    expect(leftSleeveAnchor.position.y).toBeCloseTo(32.18, 2);
     expect(leftSleeveAnchor.scale.x).toBeCloseTo(expectedScaleX, 4);
     expect(leftSleeveAnchor.scale.y).toBeCloseTo(expectedScaleY, 4);
     expect(leftSleeveAnchor.scale.z).toBeCloseTo(expectedScaleZ, 4);

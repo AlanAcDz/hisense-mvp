@@ -6,6 +6,8 @@ import {
   type MirrorStageProps,
 } from '@/components/mirror-stage'
 
+const FOCUS_SLEEVES_TORSO_OPACITY = 0.35
+
 type MirrorStageComponent = ForwardRefExoticComponent<
   MirrorStageProps & RefAttributes<MirrorStageHandle>
 >
@@ -48,7 +50,9 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
             <button
               type="button"
               aria-pressed={jerseyOpacity < 1}
-              onClick={() => setJerseyOpacity((current) => (current < 1 ? 1 : 0.1))}
+              onClick={() =>
+                setJerseyOpacity((current) => (current < 1 ? 1 : FOCUS_SLEEVES_TORSO_OPACITY))
+              }
               className="rounded-full border border-white/14 bg-white/7 px-5 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white/92 transition hover:border-cyan-200/40 hover:bg-cyan-300/10"
             >
               {jerseyOpacity < 1 ? 'Restore Jersey' : 'Focus Sleeves'}

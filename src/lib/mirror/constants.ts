@@ -4,9 +4,13 @@ function withBaseUrl(path: string) {
   return `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
 }
 
-export const JERSEY_FRONT_MODEL_URL = withBaseUrl('/assets/models/hisense-jersey-front.glb')
-export const JERSEY_SLEEVES_MODEL_URL = withBaseUrl('/assets/models/hisense-jersey-sleeves.glb')
-export const BACKGROUND_ASSET_URL = withBaseUrl('/assets/backgrounds/hisense-football-stadium-2026.jpg')
+export const JERSEY_FRONT_MODEL_URL = withBaseUrl('/assets/models/playera_1.fbx')
+export const JERSEY_SLEEVES_MODEL_URL = withBaseUrl('/assets/models/playera_2.fbx')
+// export const JERSEY_FRONT_MODEL_URL = withBaseUrl('/assets/models/hisense-jersey-front.glb')
+// export const JERSEY_SLEEVES_MODEL_URL = withBaseUrl('/assets/models/hisense-jersey-sleeves.glb')
+export const BACKGROUND_ASSET_URL = withBaseUrl(
+  '/assets/backgrounds/hisense-football-stadium-2026.jpg',
+)
 export const LANDMARK_INDICES = {
   leftShoulder: 11,
   rightShoulder: 12,
@@ -34,7 +38,7 @@ export const BACKGROUND_MASK_DRAW_BLUR_PX = 1.5
 export const BACKGROUND_MASK_MIN_COVERAGE = 0.015
 
 export const SHIRT_CALIBRATION: ShirtCalibration = {
-  scaleX: 1.55,
+  scaleX: 1.24,
   scaleY: 1.2,
   scaleZ: 2.5,
   xOffset: 0,
@@ -49,10 +53,11 @@ export const SHIRT_CALIBRATION: ShirtCalibration = {
 }
 
 export const SLEEVE_CALIBRATION: SleeveCalibration = {
-  scaleX: 1.2075,
-  scaleY: 0.945,
-  scaleZ: 1.1725,
-  yOffset: 0.51,
+  scaleX: 1.3584375,
+  scaleY: 1.063125,
+  scaleZ: 1.3190625,
+  xOffset: 0.2,
+  yOffset: 0.9,
   zOffset: 14,
   baseRotation: {
     x: Math.PI,
