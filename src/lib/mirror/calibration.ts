@@ -1,7 +1,6 @@
 import {
   LANDMARK_INDICES,
   SHIRT_CALIBRATION,
-  SLEEVE_ANCHOR_RATIO,
   SLEEVE_CALIBRATION,
 } from '@/lib/mirror/constants'
 import { computeSleeveTransform, computeTorsoTransform } from '@/lib/mirror/pose/torso'
@@ -89,7 +88,6 @@ export function buildCalibrationPreviewScene(
   pose: CalibrationPreviewPose,
   shirtCalibration: ShirtCalibration = SHIRT_CALIBRATION,
   sleeveCalibration: SleeveCalibration = SLEEVE_CALIBRATION,
-  sleeveAnchorRatio: number = SLEEVE_ANCHOR_RATIO,
 ): CalibrationPreviewScene | null {
   if (!stageSize.width || !stageSize.height) {
     return null
@@ -131,18 +129,8 @@ export function buildCalibrationPreviewScene(
 
   return {
     torsoTransform,
-    leftSleeveTransform: applyPreviewSleeveAdjustments(
-      leftSleeveTransform,
-      rawOverlay.leftShoulder,
-      rawOverlay.leftElbow,
-      sleeveAnchorRatio,
-    ),
-    rightSleeveTransform: applyPreviewSleeveAdjustments(
-      rightSleeveTransform,
-      rawOverlay.rightShoulder,
-      rawOverlay.rightElbow,
-      sleeveAnchorRatio,
-    ),
+    leftSleeveTransform: applySleeveRenderTwist(leftSleeveTransform),
+    rightSleeveTransform: applySleeveRenderTwist(rightSleeveTransform),
     overlay,
   }
 }
@@ -150,16 +138,11 @@ export function buildCalibrationPreviewScene(
 export function buildCalibrationSnippet({
   shirtCalibration,
   sleeveCalibration,
-  sleeveAnchorRatio,
 }: {
   shirtCalibration: ShirtCalibration
   sleeveCalibration: SleeveCalibration
-  sleeveAnchorRatio: number
 }) {
-  return `export const SLEEVE_ANCHOR_RATIO = ${formatNumber(sleeveAnchorRatio)}
-export const SLEEVE_MODEL_REFERENCE_RATIO = SLEEVE_ANCHOR_RATIO
-
-export const SHIRT_CALIBRATION: ShirtCalibration = {
+  return `export const SHIRT_CALIBRATION: ShirtCalibration = {
   scaleX: ${formatNumber(shirtCalibration.scaleX)},
   scaleY: ${formatNumber(shirtCalibration.scaleY)},
   scaleZ: ${formatNumber(shirtCalibration.scaleZ)},
@@ -182,6 +165,8 @@ export const SLEEVE_CALIBRATION: SleeveCalibration = {
   yOffset: ${formatNumber(sleeveCalibration.yOffset)},
   lineOffset: ${formatNumber(sleeveCalibration.lineOffset)},
   zOffset: ${formatNumber(sleeveCalibration.zOffset)},
+  leftZRotationOffset: ${formatNumber(sleeveCalibration.leftZRotationOffset)},
+  rightZRotationOffset: ${formatNumber(sleeveCalibration.rightZRotationOffset)},
   baseRotation: {
     x: ${formatNumber(sleeveCalibration.baseRotation.x)},
     y: ${formatNumber(sleeveCalibration.baseRotation.y)},
@@ -412,25 +397,4 @@ function pointAlongAngle(origin: Point2D, angleDeg: number, distance: number): P
 
 function toRadians(value: number) {
   return (value * Math.PI) / 180
-}
-
-function applyPreviewSleeveAdjustments(
-  transform: SleeveTransform,
-  shoulder: Point2D,
-  elbow: Point2D,
-  sleeveAnchorRatio: number,
-): SleeveTransform {
-  const armVector = {
-    x: elbow.x - shoulder.x,
-    y: elbow.y - shoulder.y,
-  }
-  const anchorDelta = sleeveAnchorRatio - SLEEVE_ANCHOR_RATIO
-
-  return applySleeveRenderTwist({
-    ...transform,
-    center: {
-      x: transform.center.x + armVector.x * anchorDelta,
-      y: transform.center.y + armVector.y * anchorDelta,
-    },
-  })
 }

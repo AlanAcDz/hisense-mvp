@@ -1,5 +1,4 @@
 import { Euler, Vector3 } from 'three';
-import { SLEEVE_ANCHOR_RATIO } from '@/lib/mirror/constants';
 import {
   computeSleeveTransform,
   computeTorsoTransform,
@@ -16,6 +15,8 @@ const NEUTRAL_SLEEVE_CALIBRATION = {
   yOffset: 0,
   lineOffset: 0,
   zOffset: 0,
+  leftZRotationOffset: 0,
+  rightZRotationOffset: 0,
   baseRotation: { x: 0, y: 0, z: 0 },
 } as const;
 
@@ -132,14 +133,8 @@ describe('torso transform', () => {
     );
     expect(sleeveTransform).not.toBeNull();
     expect(sleeveTransform?.lengthPx).toBeCloseTo(expectedArmLength * 0.64, 4);
-    expect(sleeveTransform?.center.x).toBeCloseTo(
-      expectedShoulder.x + (expectedElbow.x - expectedShoulder.x) * SLEEVE_ANCHOR_RATIO,
-      4
-    );
-    expect(sleeveTransform?.center.y).toBeCloseTo(
-      expectedShoulder.y + (expectedElbow.y - expectedShoulder.y) * SLEEVE_ANCHOR_RATIO,
-      4
-    );
+    expect(sleeveTransform?.center.x).toBeCloseTo(expectedShoulder.x, 4);
+    expect(sleeveTransform?.center.y).toBeCloseTo(expectedShoulder.y, 4);
     expect(sleeveTransform?.shoulderWidthPx).toBeGreaterThan(torsoTransform!.widthPx * 0.27);
     expect(sleeveTransform?.elbowWidthPx).toBeGreaterThan(expectedArmLength * 0.16);
   });
@@ -166,10 +161,7 @@ describe('torso transform', () => {
     const expectedElbow = { x: stageSize.width * 0.15, y: stageSize.height * 0.38 };
 
     expect(sleeveTransform).not.toBeNull();
-    expect(sleeveTransform?.center.x).toBeCloseTo(
-      expectedShoulder.x + (expectedElbow.x - expectedShoulder.x) * SLEEVE_ANCHOR_RATIO,
-      4
-    );
+    expect(sleeveTransform?.center.x).toBeCloseTo(expectedShoulder.x, 4);
     expect(sleeveTransform?.center.y).toBeCloseTo(expectedShoulder.y, 4);
   });
 

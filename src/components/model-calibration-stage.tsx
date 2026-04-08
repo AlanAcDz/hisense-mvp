@@ -19,7 +19,6 @@ type CalibrationSceneControllerRuntime = Pick<
   | 'resize'
   | 'setCalibrations'
   | 'setJerseyOpacity'
-  | 'setSleeveModelReferenceRatio'
   | 'setSleeveOpacity'
   | 'updateShirtTransform'
   | 'updateSleeves'
@@ -29,7 +28,6 @@ const DEFAULT_CREATE_SCENE_CONTROLLER = () => new ShirtSceneController()
 export interface ModelCalibrationStageProps {
   shirtCalibration: ShirtCalibration
   sleeveCalibration: SleeveCalibration
-  sleeveAnchorRatio: number
   torsoOpacity: number
   sleeveOpacity: number
   pose: CalibrationPreviewPose
@@ -76,7 +74,6 @@ function useStageSize(stageRef: RefObject<HTMLDivElement | null>) {
 export function ModelCalibrationStage({
   shirtCalibration,
   sleeveCalibration,
-  sleeveAnchorRatio,
   torsoOpacity,
   sleeveOpacity,
   pose,
@@ -97,9 +94,8 @@ export function ModelCalibrationStage({
         pose,
         shirtCalibration,
         sleeveCalibration,
-        sleeveAnchorRatio,
       ),
-    [pose, shirtCalibration, sleeveCalibration, sleeveAnchorRatio, stageSize],
+    [pose, shirtCalibration, sleeveCalibration, stageSize],
   )
 
   useEffect(() => {
@@ -146,7 +142,6 @@ export function ModelCalibrationStage({
     controller.resize(stageSize)
     controller.setCalibrations(shirtCalibration, sleeveCalibration)
     controller.setJerseyOpacity(torsoOpacity)
-    controller.setSleeveModelReferenceRatio(sleeveAnchorRatio)
     controller.setSleeveOpacity(sleeveOpacity)
     controller.updateShirtTransform(previewScene.torsoTransform)
     controller.updateSleeves(previewScene.leftSleeveTransform, previewScene.rightSleeveTransform)

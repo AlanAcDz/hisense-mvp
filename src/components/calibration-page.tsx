@@ -11,7 +11,6 @@ import {
 } from '@/lib/mirror/calibration'
 import {
   SHIRT_CALIBRATION,
-  SLEEVE_ANCHOR_RATIO,
   SLEEVE_CALIBRATION,
 } from '@/lib/mirror/constants'
 import { ModelCalibrationStage, type ModelCalibrationStageProps } from '@/components/model-calibration-stage'
@@ -26,7 +25,6 @@ interface CalibrationPageProps {
 export function CalibrationPage({ StageComponent = ModelCalibrationStage }: CalibrationPageProps) {
   const [shirtCalibration, setShirtCalibration] = useState(() => cloneShirtCalibration(SHIRT_CALIBRATION))
   const [sleeveCalibration, setSleeveCalibration] = useState(() => cloneSleeveCalibration(SLEEVE_CALIBRATION))
-  const [sleeveAnchorRatio, setSleeveAnchorRatio] = useState(SLEEVE_ANCHOR_RATIO)
   const [torsoOpacity, setTorsoOpacity] = useState(DEFAULT_TORSO_OPACITY)
   const [sleeveOpacity, setSleeveOpacity] = useState(DEFAULT_SLEEVE_OPACITY)
   const [pose, setPose] = useState<CalibrationPreviewPose>(DEFAULT_CALIBRATION_PREVIEW_POSE)
@@ -38,9 +36,8 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
       buildCalibrationSnippet({
         shirtCalibration,
         sleeveCalibration,
-        sleeveAnchorRatio,
       }),
-    [shirtCalibration, sleeveAnchorRatio, sleeveCalibration],
+    [shirtCalibration, sleeveCalibration],
   )
 
   async function copySnippet() {
@@ -60,7 +57,6 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
   function resetAll() {
     setShirtCalibration(cloneShirtCalibration(SHIRT_CALIBRATION))
     setSleeveCalibration(cloneSleeveCalibration(SLEEVE_CALIBRATION))
-    setSleeveAnchorRatio(SLEEVE_ANCHOR_RATIO)
     setTorsoOpacity(DEFAULT_TORSO_OPACITY)
     setSleeveOpacity(DEFAULT_SLEEVE_OPACITY)
     setPose(DEFAULT_CALIBRATION_PREVIEW_POSE)
@@ -114,7 +110,6 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
           <StageComponent
             shirtCalibration={shirtCalibration}
             sleeveCalibration={sleeveCalibration}
-            sleeveAnchorRatio={sleeveAnchorRatio}
             torsoOpacity={torsoOpacity}
             sleeveOpacity={sleeveOpacity}
             pose={pose}
@@ -143,14 +138,6 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
                 max={1}
                 step={0.01}
                 onChange={setSleeveOpacity}
-              />
-              <NumberSliderControl
-                label="Sleeve Anchor"
-                value={sleeveAnchorRatio}
-                min={0.05}
-                max={0.5}
-                step={0.01}
-                onChange={setSleeveAnchorRatio}
               />
             </div>
           </section>
@@ -322,6 +309,26 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
                 max={200}
                 step={1}
                 onChange={(value) => updateSleeveCalibration(setSleeveCalibration, 'zOffset', value)}
+              />
+              <NumberSliderControl
+                label="Left Rot Z"
+                value={sleeveCalibration.leftZRotationOffset}
+                min={-Math.PI}
+                max={Math.PI}
+                step={0.01}
+                onChange={(value) =>
+                  updateSleeveCalibration(setSleeveCalibration, 'leftZRotationOffset', value)
+                }
+              />
+              <NumberSliderControl
+                label="Right Rot Z"
+                value={sleeveCalibration.rightZRotationOffset}
+                min={-Math.PI}
+                max={Math.PI}
+                step={0.01}
+                onChange={(value) =>
+                  updateSleeveCalibration(setSleeveCalibration, 'rightZRotationOffset', value)
+                }
               />
               <NumberSliderControl
                 label="Base Rot X"

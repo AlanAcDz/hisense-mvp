@@ -56,33 +56,34 @@ describe('buildCalibrationPreviewScene', () => {
     expect(leftSleeveShift).toBeGreaterThan(10)
   })
 
-  it('moves the sleeve farther down the arm when the preview anchor ratio increases', () => {
-    const neutralSleeveCalibration = cloneSleeveCalibration()
-    neutralSleeveCalibration.xOffset = 0
-    neutralSleeveCalibration.yOffset = 0
+  it('lifts sleeves higher when lineOffset increases', () => {
+    const lowOffsetCalibration = cloneSleeveCalibration()
+    lowOffsetCalibration.xOffset = 0
+    lowOffsetCalibration.yOffset = 0
+    lowOffsetCalibration.lineOffset = 0
 
-    const nearAnchorScene = buildCalibrationPreviewScene(
+    const highOffsetCalibration = cloneSleeveCalibration()
+    highOffsetCalibration.xOffset = 0
+    highOffsetCalibration.yOffset = 0
+    highOffsetCalibration.lineOffset = 0.3
+
+    const lowScene = buildCalibrationPreviewScene(
       stageSize,
       DEFAULT_CALIBRATION_PREVIEW_POSE,
       cloneShirtCalibration(),
-      neutralSleeveCalibration,
-      0.1,
+      lowOffsetCalibration,
     )
-    const farAnchorScene = buildCalibrationPreviewScene(
+    const highScene = buildCalibrationPreviewScene(
       stageSize,
       DEFAULT_CALIBRATION_PREVIEW_POSE,
       cloneShirtCalibration(),
-      neutralSleeveCalibration,
-      0.4,
+      highOffsetCalibration,
     )
 
-    expect(nearAnchorScene).not.toBeNull()
-    expect(farAnchorScene).not.toBeNull()
-    expect(farAnchorScene!.leftSleeveTransform.center.x).toBeGreaterThan(
-      nearAnchorScene!.leftSleeveTransform.center.x,
-    )
-    expect(farAnchorScene!.leftSleeveTransform.center.y).toBeGreaterThan(
-      nearAnchorScene!.leftSleeveTransform.center.y,
+    expect(lowScene).not.toBeNull()
+    expect(highScene).not.toBeNull()
+    expect(highScene!.leftSleeveTransform.center.y).toBeLessThan(
+      lowScene!.leftSleeveTransform.center.y,
     )
   })
 

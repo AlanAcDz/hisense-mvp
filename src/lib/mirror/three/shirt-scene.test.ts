@@ -79,18 +79,28 @@ describe('ShirtSceneController', () => {
     const leftSleeveSize = (controller as any).leftSleeveModelSize as { x: number; y: number };
     const rightSleeveRoot = (controller as any).rightSleeveModelRoot as Group | null;
     const rightSleeveSize = (controller as any).rightSleeveModelSize as { x: number; y: number };
-    const expectedRotation = new Quaternion().setFromEuler(new Euler(Math.PI, 0, 0));
-    const expectedPivotX = leftSleeveSize.x * (0.5 + SLEEVE_CALIBRATION.lineOffset);
+    const expectedLeftRotation = new Quaternion().setFromEuler(
+      new Euler(Math.PI, 0, SLEEVE_CALIBRATION.leftZRotationOffset)
+    );
+    const expectedRightRotation = new Quaternion().setFromEuler(
+      new Euler(Math.PI, 0, SLEEVE_CALIBRATION.rightZRotationOffset)
+    );
+    const expectedLeftPivotPosition = new Vector3(leftSleeveSize.x * 0.5, leftSleeveSize.y * 0.5, 0)
+      .applyQuaternion(expectedLeftRotation)
+      .multiplyScalar(-1);
+    const expectedRightPivotPosition = new Vector3(-rightSleeveSize.x * 0.5, rightSleeveSize.y * 0.5, 0)
+      .applyQuaternion(expectedRightRotation)
+      .multiplyScalar(-1);
 
     expect(loadResult.usedFallback).toBe(false);
     expect(leftSleeveRoot).toBeTruthy();
     expect(rightSleeveRoot).toBeTruthy();
-    expect(leftSleeveRoot?.quaternion.angleTo(expectedRotation)).toBeLessThan(1e-6);
-    expect(rightSleeveRoot?.quaternion.angleTo(expectedRotation)).toBeLessThan(1e-6);
-    expect(leftSleeveRoot?.position.x).toBeCloseTo(-expectedPivotX, 6);
-    expect(leftSleeveRoot?.position.y).toBeCloseTo(leftSleeveSize.y / 2, 6);
-    expect(rightSleeveRoot?.position.x).toBeCloseTo(expectedPivotX, 6);
-    expect(rightSleeveRoot?.position.y).toBeCloseTo(rightSleeveSize.y / 2, 6);
+    expect(leftSleeveRoot?.quaternion.angleTo(expectedLeftRotation)).toBeLessThan(1e-6);
+    expect(rightSleeveRoot?.quaternion.angleTo(expectedRightRotation)).toBeLessThan(1e-6);
+    expect(leftSleeveRoot?.position.x).toBeCloseTo(expectedLeftPivotPosition.x, 6);
+    expect(leftSleeveRoot?.position.y).toBeCloseTo(expectedLeftPivotPosition.y, 6);
+    expect(rightSleeveRoot?.position.x).toBeCloseTo(expectedRightPivotPosition.x, 6);
+    expect(rightSleeveRoot?.position.y).toBeCloseTo(expectedRightPivotPosition.y, 6);
   });
 
   it('keeps the loaded torso model facing forward with the default calibration', async () => {
@@ -132,6 +142,8 @@ describe('ShirtSceneController', () => {
       yOffset: 0.7,
       lineOffset: 0,
       zOffset: 0,
+      leftZRotationOffset: 0,
+      rightZRotationOffset: 0,
       baseRotation: { x: 0, y: 0, z: 0 },
     });
     await loadMockModels(controller);
@@ -201,6 +213,8 @@ describe('ShirtSceneController', () => {
       yOffset: 0,
       lineOffset: 0,
       zOffset: 0,
+      leftZRotationOffset: 0,
+      rightZRotationOffset: 0,
       baseRotation: { x: 0, y: 0, z: 0 },
     });
     await loadMockModels(controller);

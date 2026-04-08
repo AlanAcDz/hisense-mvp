@@ -57,7 +57,8 @@ export class ShirtSceneController {
   private jerseyOpacity = 1;
   private sleeveOpacity = 1;
   private calibrationQuaternion = new Quaternion();
-  private sleeveCalibrationQuaternion = new Quaternion();
+  private leftSleeveCalibrationQuaternion = new Quaternion();
+  private rightSleeveCalibrationQuaternion = new Quaternion();
   private sleeveModelReferenceRatio = SLEEVE_MODEL_REFERENCE_RATIO;
 
   private readonly leftSleeveAnchor: Group;
@@ -107,11 +108,24 @@ export class ShirtSceneController {
     this.rightSleeveAnchor = new Group();
     this.rightSleeveAnchor.visible = false;
 
-    const ambient = new AmbientLight(0xffffff, 1.15);
-    const keyLight = new DirectionalLight(0xffffff, 0.65);
-    keyLight.position.set(0, 0, 1);
+    // Angled lights preserve depth cues in the orthographic preview.
+    const ambient = new AmbientLight(0xffffff, 0.5);
+    const keyLight = new DirectionalLight(0xffffff, 1.05);
+    keyLight.position.set(0.85, 0.35, 1.2);
+    const fillLight = new DirectionalLight(0xd7ecff, 0.45);
+    fillLight.position.set(-1.1, 0.2, 0.7);
+    const topLight = new DirectionalLight(0xfff4de, 0.28);
+    topLight.position.set(0, 1, 0.45);
 
-    this.scene.add(ambient, keyLight, this.shirtAnchor, this.leftSleeveAnchor, this.rightSleeveAnchor);
+    this.scene.add(
+      ambient,
+      keyLight,
+      fillLight,
+      topLight,
+      this.shirtAnchor,
+      this.leftSleeveAnchor,
+      this.rightSleeveAnchor
+    );
     this.refreshCalibrationQuaternions();
   }
 
@@ -198,9 +212,7 @@ export class ShirtSceneController {
     const nextCalibration = cloneShirtCalibration(calibration);
     const nextSleeveCalibration = cloneSleeveCalibration(sleeveCalibration);
     const shouldReattachTorso = !sameEuler(this.calibration.baseRotation, nextCalibration.baseRotation);
-    const shouldReattachSleeves =
-      !sameEuler(this.sleeveCalibration.baseRotation, nextSleeveCalibration.baseRotation) ||
-      this.sleeveCalibration.lineOffset !== nextSleeveCalibration.lineOffset;
+    const shouldReattachSleeves = !sameSleeveModelRotation(this.sleeveCalibration, nextSleeveCalibration);
 
     this.calibration = nextCalibration;
     this.sleeveCalibration = nextSleeveCalibration;
@@ -279,12 +291,9 @@ export class ShirtSceneController {
         this.calibration.baseRotation.z
       )
     );
-    this.sleeveCalibrationQuaternion.setFromEuler(
-      new Euler(
-        this.sleeveCalibration.baseRotation.x,
-        this.sleeveCalibration.baseRotation.y,
-        this.sleeveCalibration.baseRotation.z
-      )
+    this.leftSleeveCalibrationQuaternion.copy(buildSleeveCalibrationQuaternion(this.sleeveCalibration, 'left'));
+    this.rightSleeveCalibrationQuaternion.copy(
+      buildSleeveCalibrationQuaternion(this.sleeveCalibration, 'right')
     );
   }
 
@@ -384,17 +393,13 @@ export class ShirtSceneController {
       this.leftSleeveAnchor,
       this.leftSleeveModelRoot,
       leftSleeve,
-      this.sleeveCalibrationQuaternion,
-      new Vector3(1, 0, 0),
-      this.sleeveCalibration.lineOffset
+      this.leftSleeveCalibrationQuaternion,
     );
     const rightAttachment = this.replaceAnchorModel(
       this.rightSleeveAnchor,
       this.rightSleeveModelRoot,
       rightSleeve,
-      this.sleeveCalibrationQuaternion,
-      new Vector3(-1, 0, 0),
-      this.sleeveCalibration.lineOffset
+      this.rightSleeveCalibrationQuaternion,
     );
 
     this.leftSleeveModelRoot = leftAttachment.modelRoot;
@@ -404,13 +409,13 @@ export class ShirtSceneController {
     const leftSleevePivot = getSleevePivotData(
       leftAttachment.bounds,
       'left',
-      this.sleeveCalibrationQuaternion,
+      this.leftSleeveCalibrationQuaternion,
       this.sleeveModelReferenceRatio
     );
     const rightSleevePivot = getSleevePivotData(
       rightAttachment.bounds,
       'right',
-      this.sleeveCalibrationQuaternion,
+      this.rightSleeveCalibrationQuaternion,
       this.sleeveModelReferenceRatio
     );
 
@@ -533,6 +538,30 @@ function sameEuler(
   second: { x: number; y: number; z: number }
 ) {
   return first.x === second.x && first.y === second.y && first.z === second.z;
+}
+
+function sameSleeveModelRotation(first: SleeveCalibration, second: SleeveCalibration) {
+  return (
+    sameEuler(first.baseRotation, second.baseRotation) &&
+    first.leftZRotationOffset === second.leftZRotationOffset &&
+    first.rightZRotationOffset === second.rightZRotationOffset
+  );
+}
+
+function buildSleeveCalibrationQuaternion(
+  calibration: SleeveCalibration,
+  side: 'left' | 'right'
+) {
+  const sideZRotation =
+    side === 'left' ? calibration.leftZRotationOffset : calibration.rightZRotationOffset;
+
+  return new Quaternion().setFromEuler(
+    new Euler(
+      calibration.baseRotation.x,
+      calibration.baseRotation.y,
+      calibration.baseRotation.z + sideZRotation
+    )
+  );
 }
 
 function getSleevePivotData(

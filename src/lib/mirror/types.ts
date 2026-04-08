@@ -143,6 +143,8 @@ export interface SleeveCalibration {
   yOffset: number;
   lineOffset: number;
   zOffset: number;
+  leftZRotationOffset: number;
+  rightZRotationOffset: number;
   baseRotation: {
     x: number;
     y: number;
