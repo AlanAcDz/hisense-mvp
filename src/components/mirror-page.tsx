@@ -24,14 +24,16 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
 
   return (
     <main className="relative h-dvh w-screen overflow-hidden bg-black">
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-end px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
-        <a
-          href={`${import.meta.env.BASE_URL}calibration`}
-          className="pointer-events-auto rounded-full border border-white/14 bg-white/7 px-5 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/92 transition hover:border-cyan-200/40 hover:bg-cyan-300/10"
-        >
-          Calibration Lab
-        </a>
-      </div>
+      {import.meta.env.DEV ? (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-end px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
+          <a
+            href={`${import.meta.env.BASE_URL}calibration`}
+            className="pointer-events-auto rounded-full border border-white/14 bg-white/7 px-5 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/92 transition hover:border-cyan-200/40 hover:bg-cyan-300/10"
+          >
+            Calibration Lab
+          </a>
+        </div>
+      ) : null}
 
       <StageComponent
         ref={stageRef}
