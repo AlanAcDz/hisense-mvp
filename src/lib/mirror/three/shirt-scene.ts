@@ -21,6 +21,7 @@ import {
   JERSEY_SLEEVES_MODEL_URL,
   SHIRT_CALIBRATION,
   SLEEVE_CALIBRATION,
+  SLEEVE_MODEL_REFERENCE_RATIO,
 } from '@/lib/mirror/constants';
 import { smoothQuaternion, smoothVector3 } from '@/lib/mirror/pose/smoothing';
 import type {
@@ -57,6 +58,7 @@ export class ShirtSceneController {
   private sleeveOpacity = 1;
   private calibrationQuaternion = new Quaternion();
   private sleeveCalibrationQuaternion = new Quaternion();
+  private sleeveModelReferenceRatio = SLEEVE_MODEL_REFERENCE_RATIO;
 
   private readonly leftSleeveAnchor: Group;
   private readonly rightSleeveAnchor: Group;
@@ -66,6 +68,10 @@ export class ShirtSceneController {
   private rightSleeveModelSource: Object3D | null = null;
   private leftSleeveModelSize = new Vector3(1, 1, 1);
   private rightSleeveModelSize = new Vector3(1, 1, 1);
+  private leftSleevePivotPosition = new Vector3(0.5, 0.5, 0);
+  private rightSleevePivotPosition = new Vector3(-0.5, 0.5, 0);
+  private leftSleeveReferenceOffset = new Vector3();
+  private rightSleeveReferenceOffset = new Vector3();
   private leftSleevePosition = new Vector3();
   private leftSleeveScale = new Vector3(1, 1, 1);
   private leftSleeveRotation = new Quaternion();
@@ -170,6 +176,22 @@ export class ShirtSceneController {
   setSleeveOpacity(opacity: number) {
     this.sleeveOpacity = opacity;
     this.applySleeveOpacity();
+  }
+
+  setSleeveModelReferenceRatio(ratio: number) {
+    if (this.sleeveModelReferenceRatio === ratio) {
+      return;
+    }
+
+    this.sleeveModelReferenceRatio = ratio;
+
+    if (this.leftSleeveModelSource && this.rightSleeveModelSource) {
+      this.attachSleeveModels(
+        this.leftSleeveModelSource.clone(true),
+        this.rightSleeveModelSource.clone(true)
+      );
+      this.updateSleeves(this.currentLeftSleeveTransform, this.currentRightSleeveTransform);
+    }
   }
 
   setCalibrations(calibration: ShirtCalibration, sleeveCalibration: SleeveCalibration) {
@@ -279,8 +301,10 @@ export class ShirtSceneController {
     anchor.visible = true;
 
     const modelSize = side === 'left' ? this.leftSleeveModelSize : this.rightSleeveModelSize;
+    const referenceOffset =
+      side === 'left' ? this.leftSleeveReferenceOffset : this.rightSleeveReferenceOffset;
     const sleeveWidth = (sleeve.shoulderWidthPx + sleeve.elbowWidthPx) / 2;
-    const targetPosition = new Vector3(
+    const targetReferencePosition = new Vector3(
       this.stageSize.width / 2 - sleeve.center.x,
       this.stageSize.height / 2 - sleeve.center.y,
       this.shirtAnchor.position.z + this.sleeveCalibration.zOffset
@@ -292,6 +316,9 @@ export class ShirtSceneController {
     );
 
     const targetRotation = new Quaternion().copy(sleeve.rotation);
+    const targetPosition = targetReferencePosition.sub(
+      referenceOffset.clone().multiply(targetScale).applyQuaternion(targetRotation)
+    );
 
     if (side === 'left') {
       this.leftSleevePosition = smoothVector3(this.leftSleevePosition, targetPosition, 0.65);
@@ -374,6 +401,25 @@ export class ShirtSceneController {
     this.leftSleeveModelSize = leftAttachment.size;
     this.rightSleeveModelRoot = rightAttachment.modelRoot;
     this.rightSleeveModelSize = rightAttachment.size;
+    const leftSleevePivot = getSleevePivotData(
+      leftAttachment.bounds,
+      'left',
+      this.sleeveCalibrationQuaternion,
+      this.sleeveModelReferenceRatio
+    );
+    const rightSleevePivot = getSleevePivotData(
+      rightAttachment.bounds,
+      'right',
+      this.sleeveCalibrationQuaternion,
+      this.sleeveModelReferenceRatio
+    );
+
+    this.leftSleevePivotPosition = leftSleevePivot.position;
+    this.leftSleeveReferenceOffset = leftSleevePivot.referenceOffsetFromPivot;
+    this.rightSleevePivotPosition = rightSleevePivot.position;
+    this.rightSleeveReferenceOffset = rightSleevePivot.referenceOffsetFromPivot;
+    this.leftSleeveModelRoot.position.copy(this.leftSleevePivotPosition).multiplyScalar(-1);
+    this.rightSleeveModelRoot.position.copy(this.rightSleevePivotPosition).multiplyScalar(-1);
     this.leftSleevePosition.set(0, 0, 0);
     this.leftSleeveScale.set(1, 1, 1);
     this.leftSleeveRotation.identity();
@@ -414,16 +460,20 @@ export class ShirtSceneController {
         );
       nextModel.position.add(localOffset);
     }
+    modelContainer.updateWorldMatrix(true, true);
+    const adjustedBounds = new Box3().setFromObject(modelContainer);
+    const adjustedSize = adjustedBounds.getSize(new Vector3());
     modelContainer.quaternion.copy(baseQuaternion);
     anchor.add(modelContainer);
 
     return {
       modelRoot: modelContainer,
       size: new Vector3(
-        Math.max(size.x, 0.001),
-        Math.max(size.y, 0.001),
-        Math.max(size.z, 0.001)
+        Math.max(adjustedSize.x, 0.001),
+        Math.max(adjustedSize.y, 0.001),
+        Math.max(adjustedSize.z, 0.001)
       ),
+      bounds: adjustedBounds.clone(),
     };
   }
 }
@@ -483,6 +533,31 @@ function sameEuler(
   second: { x: number; y: number; z: number }
 ) {
   return first.x === second.x && first.y === second.y && first.z === second.z;
+}
+
+function getSleevePivotData(
+  bounds: Box3,
+  side: 'left' | 'right',
+  baseQuaternion: Quaternion,
+  referenceRatio: number
+) {
+  const center = bounds.getCenter(new Vector3());
+  const size = bounds.getSize(new Vector3());
+  const position = new Vector3(
+    side === 'left' ? bounds.max.x : bounds.min.x,
+    bounds.max.y,
+    (bounds.min.z + bounds.max.z) / 2
+  ).applyQuaternion(baseQuaternion);
+  const referencePosition = new Vector3(
+    center.x,
+    bounds.max.y - size.y * referenceRatio,
+    center.z
+  ).applyQuaternion(baseQuaternion);
+
+  return {
+    position,
+    referenceOffsetFromPivot: referencePosition.sub(position),
+  };
 }
 
 function cloneWorldSpaceNode(node: Object3D) {

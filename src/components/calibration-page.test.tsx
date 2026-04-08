@@ -53,7 +53,7 @@ describe('CalibrationPage', () => {
 
     render(<CalibrationPage StageComponent={FakeStage} />)
 
-    fireEvent.change(screen.getAllByDisplayValue(String(SLEEVE_ANCHOR_RATIO))[1], {
+    fireEvent.change(screen.getByRole('slider', { name: /sleeve anchor/i }), {
       target: { value: '0.31' },
     })
 

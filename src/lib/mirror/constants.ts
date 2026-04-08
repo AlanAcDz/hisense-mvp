@@ -24,7 +24,8 @@ export const REQUIRED_TORSO_INDICES = Object.values(LANDMARK_INDICES)
 export const TORSO_VISIBILITY_THRESHOLD = 0.5
 export const DETECTION_INTERVAL_MS = 33
 export const DETECTION_INPUT_LONG_EDGE_PX = 512
-export const SLEEVE_ANCHOR_RATIO = 0.24
+export const SLEEVE_ANCHOR_RATIO = 2
+export const SLEEVE_MODEL_REFERENCE_RATIO = SLEEVE_ANCHOR_RATIO
 export const POSE_CONFIDENCE = {
   minPoseDetectionConfidence: 0.6,
   minPosePresenceConfidence: 0.6,
@@ -39,7 +40,7 @@ export const BACKGROUND_MASK_DRAW_BLUR_PX = 1.5
 export const BACKGROUND_MASK_MIN_COVERAGE = 0.015
 
 export const SHIRT_CALIBRATION: ShirtCalibration = {
-  scaleX: 1.24,
+  scaleX: 1.1,
   scaleY: 1.2,
   scaleZ: 2.5,
   xOffset: 0,
@@ -54,12 +55,12 @@ export const SHIRT_CALIBRATION: ShirtCalibration = {
 }
 
 export const SLEEVE_CALIBRATION: SleeveCalibration = {
-  scaleX: 1.3584375,
-  scaleY: 1.063125,
+  scaleX: 1.4,
+  scaleY: 1.65,
   scaleZ: 1.3190625,
   xOffset: 0.2,
   yOffset: 0.9,
-  lineOffset: -0.16,
+  lineOffset: 0.15,
   zOffset: 14,
   baseRotation: {
     x: Math.PI,

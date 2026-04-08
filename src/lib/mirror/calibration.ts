@@ -157,6 +157,7 @@ export function buildCalibrationSnippet({
   sleeveAnchorRatio: number
 }) {
   return `export const SLEEVE_ANCHOR_RATIO = ${formatNumber(sleeveAnchorRatio)}
+export const SLEEVE_MODEL_REFERENCE_RATIO = SLEEVE_ANCHOR_RATIO
 
 export const SHIRT_CALIBRATION: ShirtCalibration = {
   scaleX: ${formatNumber(shirtCalibration.scaleX)},

@@ -19,6 +19,7 @@ type CalibrationSceneControllerRuntime = Pick<
   | 'resize'
   | 'setCalibrations'
   | 'setJerseyOpacity'
+  | 'setSleeveModelReferenceRatio'
   | 'setSleeveOpacity'
   | 'updateShirtTransform'
   | 'updateSleeves'
@@ -145,6 +146,7 @@ export function ModelCalibrationStage({
     controller.resize(stageSize)
     controller.setCalibrations(shirtCalibration, sleeveCalibration)
     controller.setJerseyOpacity(torsoOpacity)
+    controller.setSleeveModelReferenceRatio(sleeveAnchorRatio)
     controller.setSleeveOpacity(sleeveOpacity)
     controller.updateShirtTransform(previewScene.torsoTransform)
     controller.updateSleeves(previewScene.leftSleeveTransform, previewScene.rightSleeveTransform)
