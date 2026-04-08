@@ -24,6 +24,7 @@ export const REQUIRED_TORSO_INDICES = Object.values(LANDMARK_INDICES)
 export const TORSO_VISIBILITY_THRESHOLD = 0.5
 export const DETECTION_INTERVAL_MS = 33
 export const DETECTION_INPUT_LONG_EDGE_PX = 512
+export const SLEEVE_ANCHOR_RATIO = 0.24
 export const POSE_CONFIDENCE = {
   minPoseDetectionConfidence: 0.6,
   minPosePresenceConfidence: 0.6,

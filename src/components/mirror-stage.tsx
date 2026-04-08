@@ -19,6 +19,7 @@ import { BACKGROUND_ASSET_URL } from '@/lib/mirror/constants';
 import { drawPoseOverlay } from '@/lib/mirror/pose/drawing';
 import { computeSleeveTransform, computeTorsoTransform, getCoverLayout } from '@/lib/mirror/pose/torso';
 import { usePoseLandmarker } from '@/lib/mirror/pose/use-pose-landmarker';
+import { applySleeveRenderTwist } from '@/lib/mirror/sleeve-render';
 import { ShirtSceneController } from '@/lib/mirror/three/shirt-scene';
 import type { MirrorSceneState, StageSize } from '@/lib/mirror/types';
 
@@ -372,9 +373,22 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       currentController.updateShirtTransform(torsoTransform);
 
       if (torsoTransform) {
+        const leftSleeveTransform = computeSleeveTransform(
+          nextPoseFrame?.leftArm ?? null,
+          torsoTransform,
+          stageSize,
+          coverLayout
+        );
+        const rightSleeveTransform = computeSleeveTransform(
+          nextPoseFrame?.rightArm ?? null,
+          torsoTransform,
+          stageSize,
+          coverLayout
+        );
+
         currentController.updateSleeves(
-          computeSleeveTransform(nextPoseFrame?.leftArm ?? null, torsoTransform, stageSize, coverLayout),
-          computeSleeveTransform(nextPoseFrame?.rightArm ?? null, torsoTransform, stageSize, coverLayout)
+          leftSleeveTransform ? applySleeveRenderTwist(leftSleeveTransform) : null,
+          rightSleeveTransform ? applySleeveRenderTwist(rightSleeveTransform) : null
         );
       } else {
         currentController.updateSleeves(null, null);

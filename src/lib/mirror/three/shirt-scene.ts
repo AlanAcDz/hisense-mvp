@@ -43,15 +43,18 @@ export class ShirtSceneController {
   private readonly scene: Scene;
   private readonly camera: OrthographicCamera;
   private readonly shirtAnchor: Group;
-  private readonly calibration: ShirtCalibration;
-  private readonly sleeveCalibration: SleeveCalibration;
+  private calibration: ShirtCalibration;
+  private sleeveCalibration: SleeveCalibration;
   private stageSize: StageSize = { width: 1, height: 1 };
   private modelRoot: Object3D | null = null;
+  private torsoModelSource: Object3D | null = null;
   private modelSize = new Vector3(1, 1, 1);
   private currentPosition = new Vector3();
   private currentScale = new Vector3(1, 1, 1);
   private currentRotation = new Quaternion();
+  private currentTorsoTransform: TorsoTransform | null = null;
   private jerseyOpacity = 1;
+  private sleeveOpacity = 1;
   private calibrationQuaternion = new Quaternion();
   private sleeveCalibrationQuaternion = new Quaternion();
 
@@ -59,21 +62,25 @@ export class ShirtSceneController {
   private readonly rightSleeveAnchor: Group;
   private leftSleeveModelRoot: Object3D | null = null;
   private rightSleeveModelRoot: Object3D | null = null;
+  private leftSleeveModelSource: Object3D | null = null;
+  private rightSleeveModelSource: Object3D | null = null;
   private leftSleeveModelSize = new Vector3(1, 1, 1);
   private rightSleeveModelSize = new Vector3(1, 1, 1);
   private leftSleevePosition = new Vector3();
   private leftSleeveScale = new Vector3(1, 1, 1);
   private leftSleeveRotation = new Quaternion();
+  private currentLeftSleeveTransform: SleeveTransform | null = null;
   private rightSleevePosition = new Vector3();
   private rightSleeveScale = new Vector3(1, 1, 1);
   private rightSleeveRotation = new Quaternion();
+  private currentRightSleeveTransform: SleeveTransform | null = null;
 
   constructor(
     calibration: ShirtCalibration = SHIRT_CALIBRATION,
     sleeveCalibration: SleeveCalibration = SLEEVE_CALIBRATION
   ) {
-    this.calibration = calibration;
-    this.sleeveCalibration = sleeveCalibration;
+    this.calibration = cloneShirtCalibration(calibration);
+    this.sleeveCalibration = cloneSleeveCalibration(sleeveCalibration);
     this.renderer = new WebGLRenderer({
       alpha: true,
       antialias: true,
@@ -99,16 +106,7 @@ export class ShirtSceneController {
     keyLight.position.set(0, 0, 1);
 
     this.scene.add(ambient, keyLight, this.shirtAnchor, this.leftSleeveAnchor, this.rightSleeveAnchor);
-    this.calibrationQuaternion.setFromEuler(
-      new Euler(calibration.baseRotation.x, calibration.baseRotation.y, calibration.baseRotation.z)
-    );
-    this.sleeveCalibrationQuaternion.setFromEuler(
-      new Euler(
-        sleeveCalibration.baseRotation.x,
-        sleeveCalibration.baseRotation.y,
-        sleeveCalibration.baseRotation.z
-      )
-    );
+    this.refreshCalibrationQuaternions();
   }
 
   get canvas() {
@@ -120,8 +118,8 @@ export class ShirtSceneController {
     const fallbackMessages: string[] = [];
 
     try {
-      const jerseyFront = await loadModelAsset(JERSEY_FRONT_MODEL_URL, manager);
-      this.attachTorsoModel(selectTorsoModel(jerseyFront));
+      this.torsoModelSource = selectTorsoModel(await loadModelAsset(JERSEY_FRONT_MODEL_URL, manager));
+      this.attachTorsoModel(this.torsoModelSource.clone(true));
     } catch (error) {
       this.attachTorsoModel(createProxyShirtGroup());
       fallbackMessages.push(
@@ -134,7 +132,9 @@ export class ShirtSceneController {
     try {
       const jerseySleeves = await loadModelAsset(JERSEY_SLEEVES_MODEL_URL, manager);
       const { leftSleeve, rightSleeve } = selectSleeveModels(jerseySleeves);
-      this.attachSleeveModels(rightSleeve, leftSleeve);
+      this.leftSleeveModelSource = leftSleeve;
+      this.rightSleeveModelSource = rightSleeve;
+      this.attachSleeveModels(this.leftSleeveModelSource.clone(true), this.rightSleeveModelSource.clone(true));
     } catch (error) {
       this.attachSleeveModels(createProxySleeveGroup(), createProxySleeveGroup());
       fallbackMessages.push(
@@ -167,7 +167,40 @@ export class ShirtSceneController {
     this.applyJerseyOpacity();
   }
 
+  setSleeveOpacity(opacity: number) {
+    this.sleeveOpacity = opacity;
+    this.applySleeveOpacity();
+  }
+
+  setCalibrations(calibration: ShirtCalibration, sleeveCalibration: SleeveCalibration) {
+    const nextCalibration = cloneShirtCalibration(calibration);
+    const nextSleeveCalibration = cloneSleeveCalibration(sleeveCalibration);
+    const shouldReattachTorso = !sameEuler(this.calibration.baseRotation, nextCalibration.baseRotation);
+    const shouldReattachSleeves =
+      !sameEuler(this.sleeveCalibration.baseRotation, nextSleeveCalibration.baseRotation) ||
+      this.sleeveCalibration.lineOffset !== nextSleeveCalibration.lineOffset;
+
+    this.calibration = nextCalibration;
+    this.sleeveCalibration = nextSleeveCalibration;
+    this.refreshCalibrationQuaternions();
+
+    if (shouldReattachTorso && this.torsoModelSource) {
+      this.attachTorsoModel(this.torsoModelSource.clone(true));
+    }
+
+    if (shouldReattachSleeves && this.leftSleeveModelSource && this.rightSleeveModelSource) {
+      this.attachSleeveModels(
+        this.leftSleeveModelSource.clone(true),
+        this.rightSleeveModelSource.clone(true)
+      );
+    }
+
+    this.updateShirtTransform(this.currentTorsoTransform);
+    this.updateSleeves(this.currentLeftSleeveTransform, this.currentRightSleeveTransform);
+  }
+
   updateShirtTransform(transform: TorsoTransform | null) {
+    this.currentTorsoTransform = transform;
     if (!this.modelRoot || !transform) {
       this.shirtAnchor.visible = false;
       return;
@@ -202,6 +235,8 @@ export class ShirtSceneController {
     leftSleeve: SleeveTransform | null,
     rightSleeve: SleeveTransform | null
   ) {
+    this.currentLeftSleeveTransform = leftSleeve;
+    this.currentRightSleeveTransform = rightSleeve;
     this.applySleeve(this.leftSleeveAnchor, leftSleeve, 'left');
     this.applySleeve(this.rightSleeveAnchor, rightSleeve, 'right');
   }
@@ -212,6 +247,23 @@ export class ShirtSceneController {
 
   dispose() {
     this.renderer.dispose();
+  }
+
+  private refreshCalibrationQuaternions() {
+    this.calibrationQuaternion.setFromEuler(
+      new Euler(
+        this.calibration.baseRotation.x,
+        this.calibration.baseRotation.y,
+        this.calibration.baseRotation.z
+      )
+    );
+    this.sleeveCalibrationQuaternion.setFromEuler(
+      new Euler(
+        this.sleeveCalibration.baseRotation.x,
+        this.sleeveCalibration.baseRotation.y,
+        this.sleeveCalibration.baseRotation.z
+      )
+    );
   }
 
   private applySleeve(
@@ -295,6 +347,11 @@ export class ShirtSceneController {
     });
   }
 
+  private applySleeveOpacity() {
+    applyOpacityToObject(this.leftSleeveModelRoot, this.sleeveOpacity);
+    applyOpacityToObject(this.rightSleeveModelRoot, this.sleeveOpacity);
+  }
+
   private attachSleeveModels(leftSleeve: Object3D, rightSleeve: Object3D) {
     const leftAttachment = this.replaceAnchorModel(
       this.leftSleeveAnchor,
@@ -323,6 +380,7 @@ export class ShirtSceneController {
     this.rightSleevePosition.set(0, 0, 0);
     this.rightSleeveScale.set(1, 1, 1);
     this.rightSleeveRotation.identity();
+    this.applySleeveOpacity();
   }
 
   private replaceAnchorModel(
@@ -377,8 +435,54 @@ function applyOpacityToMaterial(material: Material, opacity: number) {
   material.needsUpdate = true;
 }
 
+function applyOpacityToObject(root: Object3D | null, opacity: number) {
+  if (!root) {
+    return;
+  }
+
+  root.traverse((node) => {
+    if (!isMeshObject(node)) {
+      return;
+    }
+
+    if (Array.isArray(node.material)) {
+      node.material.forEach((material) => applyOpacityToMaterial(material, opacity));
+      return;
+    }
+
+    if (node.material) {
+      applyOpacityToMaterial(node.material, opacity);
+    }
+  });
+}
+
 function isMeshObject(node: Object3D): node is Mesh {
   return (node as Mesh).isMesh === true;
+}
+
+function cloneShirtCalibration(calibration: ShirtCalibration): ShirtCalibration {
+  return {
+    ...calibration,
+    baseRotation: {
+      ...calibration.baseRotation,
+    },
+  };
+}
+
+function cloneSleeveCalibration(calibration: SleeveCalibration): SleeveCalibration {
+  return {
+    ...calibration,
+    baseRotation: {
+      ...calibration.baseRotation,
+    },
+  };
+}
+
+function sameEuler(
+  first: { x: number; y: number; z: number },
+  second: { x: number; y: number; z: number }
+) {
+  return first.x === second.x && first.y === second.y && first.z === second.z;
 }
 
 function cloneWorldSpaceNode(node: Object3D) {

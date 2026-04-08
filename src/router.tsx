@@ -1,4 +1,5 @@
 import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router';
+import { CalibrationRoute } from '@/routes/calibration';
 import { HomeRoute } from '@/routes/home';
 
 function getRouterBasePath() {
@@ -23,7 +24,13 @@ const indexRoute = createRoute({
   component: HomeRoute,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute]);
+const calibrationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/calibration',
+  component: CalibrationRoute,
+});
+
+const routeTree = rootRoute.addChildren([indexRoute, calibrationRoute]);
 
 export const router = createRouter({
   basepath: getRouterBasePath(),

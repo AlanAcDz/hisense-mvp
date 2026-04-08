@@ -1,6 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import {
   LANDMARK_INDICES,
+  SLEEVE_ANCHOR_RATIO,
   SLEEVE_CALIBRATION,
   SHIRT_CALIBRATION,
   TORSO_VISIBILITY_THRESHOLD,
@@ -265,7 +266,6 @@ export function computeSleeveTransform(
     x: armVector.x / Math.max(armLengthPx, 0.001),
     y: armVector.y / Math.max(armLengthPx, 0.001),
   };
-  const sleeveAnchorRatio = 0.24;
   const shoulderWidthPx = Math.max(torsoTransform.widthPx * 0.34, armLengthPx * 0.24);
   const elbowWidthPx = Math.max(shoulderWidthPx * 0.94, armLengthPx * 0.22);
   const sleeveWidthPx = (shoulderWidthPx + elbowWidthPx) / 2;
@@ -286,11 +286,11 @@ export function computeSleeveTransform(
   const center = {
     x:
       shoulderStage.x +
-      armVector.x * sleeveAnchorRatio +
+      armVector.x * SLEEVE_ANCHOR_RATIO +
       outwardDirection.x * sleeveWidthPx * calibration.xOffset,
     y:
       shoulderStage.y +
-      armVector.y * sleeveAnchorRatio +
+      armVector.y * SLEEVE_ANCHOR_RATIO +
       outwardDirection.y * sleeveWidthPx * calibration.xOffset -
       sleeveWidthPx * calibration.yOffset * upwardLiftWeight * 0.5,
   };

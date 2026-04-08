@@ -1,4 +1,5 @@
-import { Euler } from 'three';
+import { Euler, Vector3 } from 'three';
+import { SLEEVE_ANCHOR_RATIO } from '@/lib/mirror/constants';
 import {
   computeSleeveTransform,
   computeTorsoTransform,
@@ -129,16 +130,14 @@ describe('torso transform', () => {
       expectedElbow.x - expectedShoulder.x,
       expectedElbow.y - expectedShoulder.y
     );
-    const expectedSleeveAnchorRatio = 0.24;
-
     expect(sleeveTransform).not.toBeNull();
     expect(sleeveTransform?.lengthPx).toBeCloseTo(expectedArmLength * 0.64, 4);
     expect(sleeveTransform?.center.x).toBeCloseTo(
-      expectedShoulder.x + (expectedElbow.x - expectedShoulder.x) * expectedSleeveAnchorRatio,
+      expectedShoulder.x + (expectedElbow.x - expectedShoulder.x) * SLEEVE_ANCHOR_RATIO,
       4
     );
     expect(sleeveTransform?.center.y).toBeCloseTo(
-      expectedShoulder.y + (expectedElbow.y - expectedShoulder.y) * expectedSleeveAnchorRatio,
+      expectedShoulder.y + (expectedElbow.y - expectedShoulder.y) * SLEEVE_ANCHOR_RATIO,
       4
     );
     expect(sleeveTransform?.shoulderWidthPx).toBeGreaterThan(torsoTransform!.widthPx * 0.27);
@@ -168,7 +167,7 @@ describe('torso transform', () => {
 
     expect(sleeveTransform).not.toBeNull();
     expect(sleeveTransform?.center.x).toBeCloseTo(
-      expectedShoulder.x + (expectedElbow.x - expectedShoulder.x) * 0.24,
+      expectedShoulder.x + (expectedElbow.x - expectedShoulder.x) * SLEEVE_ANCHOR_RATIO,
       4
     );
     expect(sleeveTransform?.center.y).toBeCloseTo(expectedShoulder.y, 4);
@@ -198,5 +197,28 @@ describe('torso transform', () => {
 
     expect(sleeveTransform).not.toBeNull();
     expect(sleeveTransform?.center.y).toBeCloseTo(stageSize.height * 0.38, 4);
+  });
+
+  it('orients the sleeve axis toward the shoulder before model calibration is applied', () => {
+    const poseFrame = createPoseFrame(buildNormalizedLandmarks(), buildWorldLandmarks(), 1000);
+    const stageSize = { width: 1280, height: 720 };
+    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
+    const torsoTransform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
+
+    expect(torsoTransform).not.toBeNull();
+
+    const sleeveTransform = computeSleeveTransform(
+      poseFrame?.leftArm ?? null,
+      torsoTransform!,
+      stageSize,
+      coverLayout,
+      NEUTRAL_SLEEVE_CALIBRATION
+    );
+    const expectedDirection = new Vector3(stageSize.width * (0.4 - 0.3), stageSize.height * (0.3 - 0.47), 0)
+      .normalize();
+    const actualDirection = new Vector3(0, 1, 0).applyQuaternion(sleeveTransform!.rotation).normalize();
+
+    expect(sleeveTransform).not.toBeNull();
+    expect(actualDirection.angleTo(expectedDirection)).toBeLessThan(1e-6);
   });
 });
