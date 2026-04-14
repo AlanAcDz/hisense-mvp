@@ -81,6 +81,8 @@ describe('ShirtSceneController', () => {
     expect(loadResult.usedFallback).toBe(false);
     expect((controller as any).leftArmControl).toBeTruthy();
     expect((controller as any).rightArmControl).toBeTruthy();
+    expect((controller as any).leftArmControl.bone.name).toBe('right_shouler');
+    expect((controller as any).rightArmControl.bone.name).toBe('left_shoulder');
   });
 
   it('keeps the loaded model root aligned with the default base rotation', async () => {
@@ -147,27 +149,46 @@ function createRiggedScene() {
   chest.position.set(0, 2, 0);
   root.add(chest);
 
+  const leftJoint = new Bone();
+  leftJoint.name = 'joint6';
+  leftJoint.position.set(-1, 0.2, 0);
+  chest.add(leftJoint);
+
   const leftShoulder = new Bone();
   leftShoulder.name = 'left_shoulder';
-  leftShoulder.position.set(-2, 0, 0);
-  chest.add(leftShoulder);
+  leftShoulder.position.set(-1, -0.2, 0);
+  leftJoint.add(leftShoulder);
 
   const leftArm = new Bone();
   leftArm.name = 'left_arm';
   leftArm.position.set(-3, -1, 0);
   leftShoulder.add(leftArm);
 
+  const rightJoint = new Bone();
+  rightJoint.name = 'joint10';
+  rightJoint.position.set(1, 0.2, 0);
+  chest.add(rightJoint);
+
   const rightShoulder = new Bone();
   rightShoulder.name = 'right_shouler';
-  rightShoulder.position.set(2, 0, 0);
-  chest.add(rightShoulder);
+  rightShoulder.position.set(1, -0.2, 0);
+  rightJoint.add(rightShoulder);
 
   const rightArm = new Bone();
   rightArm.name = 'right_arm';
   rightArm.position.set(3, -1, 0);
   rightShoulder.add(rightArm);
 
-  const skeleton = new Skeleton([root, chest, leftShoulder, leftArm, rightShoulder, rightArm]);
+  const skeleton = new Skeleton([
+    root,
+    chest,
+    leftJoint,
+    leftShoulder,
+    leftArm,
+    rightJoint,
+    rightShoulder,
+    rightArm,
+  ]);
   const geometry = new BoxGeometry(10, 10, 10);
   const vertexCount = geometry.getAttribute('position').count;
   const skinIndices = new Uint16Array(vertexCount * 4);

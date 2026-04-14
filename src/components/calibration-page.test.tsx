@@ -49,4 +49,23 @@ describe('CalibrationPage', () => {
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining('SHIRT_CALIBRATION'))
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining('RIG_CALIBRATION'))
   })
+
+  it('updates rig calibration from the quick sleeve offset controls', () => {
+    function FakeStage(_props: ModelCalibrationStageProps) {
+      return <div data-testid="calibration-stage" />
+    }
+
+    render(<CalibrationPage StageComponent={FakeStage} />)
+
+    const leftSleeveOffsetInput = screen.getByRole('spinbutton', {
+      name: /left sleeve offset/i,
+    })
+    fireEvent.change(leftSleeveOffsetInput, {
+      target: { value: '-0.33' },
+    })
+
+    expect(screen.getByTestId('calibration-snippet')).toHaveTextContent(
+      'leftArmZRotationOffset: -0.33',
+    )
+  })
 })

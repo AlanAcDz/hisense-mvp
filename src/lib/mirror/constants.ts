@@ -35,11 +35,11 @@ export const BACKGROUND_MASK_DRAW_BLUR_PX = 1.5
 export const BACKGROUND_MASK_MIN_COVERAGE = 0.015
 
 export const SHIRT_CALIBRATION: ShirtCalibration = {
-  scaleX: 1.1,
-  scaleY: 1.2,
+  scaleX: 1.8,
+  scaleY: 1.25,
   scaleZ: 2.5,
   xOffset: 0,
-  yOffset: -0.09,
+  yOffset: -0.05,
   zOffset: 0,
   depthScale: 120,
   baseRotation: {
@@ -50,8 +50,10 @@ export const SHIRT_CALIBRATION: ShirtCalibration = {
 }
 
 export const RIG_CALIBRATION: RigCalibration = {
-  leftArmZRotationOffset: 0,
-  rightArmZRotationOffset: 0,
+  // These offsets compensate for the sleeve meshes being authored at a stable
+  // angle relative to the shoulder-arm bone chain in jersey_mexico_rig.glb.
+  leftArmZRotationOffset: -0.821592653589793,
+  rightArmZRotationOffset: 0.838407346410207,
 }
 
 export const POSE_CONNECTIONS: Array<[number, number]> = [

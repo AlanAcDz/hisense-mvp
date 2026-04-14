@@ -486,20 +486,27 @@ function selectArmControlBone(bone: Bone) {
   const directChild = bone.children.find((child) => (child as Bone).isBone) as Bone | undefined;
   const parentBone = bone.parent && (bone.parent as Bone).isBone ? (bone.parent as Bone) : null;
 
-  if (
-    parentBone &&
-    !isTorsoBone(parentBone) &&
-    directChild
-  ) {
+  // Prefer the resolved shoulder bone when it already owns the upper-arm child.
+  // Some rigs insert helper/clavicle joints above the shoulder, and rotating the
+  // parent helper produces a visible angle translation between the sleeve and the
+  // tracked arm line.
+  if (directChild) {
+    return {
+      controlBone: bone,
+      childBone: directChild,
+    };
+  }
+
+  if (parentBone && !isTorsoBone(parentBone)) {
     return {
       controlBone: parentBone,
-      childBone: directChild,
+      childBone: bone,
     };
   }
 
   return {
     controlBone: bone,
-    childBone: directChild ?? bone,
+    childBone: bone,
   };
 }
 

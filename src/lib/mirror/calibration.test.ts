@@ -13,9 +13,18 @@ describe('buildCalibrationPreviewScene', () => {
 
     expect(scene).not.toBeNull()
     expect(scene!.overlay.leftShoulder.x).toBeLessThan(scene!.overlay.rightShoulder.x)
+    expect(scene!.overlay.leftElbow.x).toBeLessThan(scene!.overlay.leftShoulder.x)
+    expect(scene!.overlay.rightElbow.x).toBeGreaterThan(scene!.overlay.rightShoulder.x)
     expect(scene!.rigPose.leftArmZRotation).not.toBeNull()
     expect(scene!.rigPose.rightArmZRotation).not.toBeNull()
-    expect(scene!.rigPose.leftArmZRotation!).toBeGreaterThan(scene!.rigPose.rightArmZRotation!)
+    expect(scene!.rigPose.leftArmZRotation!).toBeCloseTo(
+      getVisibleArmAngle(scene!.overlay.leftShoulder, scene!.overlay.leftElbow),
+      4,
+    )
+    expect(scene!.rigPose.rightArmZRotation!).toBeCloseTo(
+      getVisibleArmAngle(scene!.overlay.rightShoulder, scene!.overlay.rightElbow),
+      4,
+    )
   })
 
   it('applies the same shirt root offsets used by the live mirror helpers', () => {
@@ -72,3 +81,10 @@ describe('buildCalibrationPreviewScene', () => {
     expect(rigCalibration.leftArmZRotationOffset).toBe(0.25)
   })
 })
+
+function getVisibleArmAngle(
+  shoulder: { x: number; y: number },
+  elbow: { x: number; y: number },
+) {
+  return Math.atan2(shoulder.y - elbow.y, elbow.x - shoulder.x)
+}

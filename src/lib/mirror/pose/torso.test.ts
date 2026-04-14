@@ -99,7 +99,7 @@ describe('torso transform', () => {
 });
 
 describe('rig pose', () => {
-  it('computes arm lift angles relative to the torso roll', () => {
+  it('computes mirrored arm lift angles relative to the torso roll', () => {
     const poseFrame = createPoseFrame(buildNormalizedLandmarks(), buildWorldLandmarks(), 1000);
     const stageSize = { width: 1280, height: 720 };
     const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
@@ -107,8 +107,8 @@ describe('rig pose', () => {
     const rigPose = computeRigPose(poseFrame, torsoTransform, stageSize, coverLayout);
 
     expect(rigPose).not.toBeNull();
-    expect(rigPose?.leftArmZRotation).toBeCloseTo(-2.378555, 4);
-    expect(rigPose?.rightArmZRotation).toBeCloseTo(-0.763038, 4);
+    expect(rigPose?.leftArmZRotation).toBeCloseTo(-0.763038, 4);
+    expect(rigPose?.rightArmZRotation).toBeCloseTo(-2.378555, 4);
   });
 
   it('returns null arm rotations when the arm landmarks are not visible', () => {

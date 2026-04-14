@@ -259,7 +259,7 @@ function computeArmZRotation(
   const elbowStage = mapNormalizedToStagePoint(arm.elbow, stageSize, coverLayout);
   const screenAngle = Math.atan2(
     shoulderStage.y - elbowStage.y,
-    elbowStage.x - shoulderStage.x
+    shoulderStage.x - elbowStage.x
   );
 
   return normalizeAngle(screenAngle - torsoRoll);

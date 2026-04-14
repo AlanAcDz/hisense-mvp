@@ -127,6 +127,24 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
                 step={0.01}
                 onChange={setGarmentOpacity}
               />
+              <NumberSliderControl
+                label="Left Sleeve Offset"
+                value={rigCalibration.leftArmZRotationOffset}
+                min={-Math.PI}
+                max={Math.PI}
+                step={0.01}
+                onChange={(value) =>
+                  updateRigCalibration(setRigCalibration, 'leftArmZRotationOffset', value)}
+              />
+              <NumberSliderControl
+                label="Right Sleeve Offset"
+                value={rigCalibration.rightArmZRotationOffset}
+                min={-Math.PI}
+                max={Math.PI}
+                step={0.01}
+                onChange={(value) =>
+                  updateRigCalibration(setRigCalibration, 'rightArmZRotationOffset', value)}
+              />
             </div>
           </section>
 
@@ -387,6 +405,7 @@ function NumberSliderControl({
         max={max}
         step={step}
         value={value}
+        aria-label={label}
         onChange={(event) => onChange(Number(event.target.value))}
         className="w-full min-w-0 accent-cyan-300"
       />
@@ -396,6 +415,7 @@ function NumberSliderControl({
         max={max}
         step={step}
         value={value}
+        aria-label={label}
         onChange={(event) => onChange(Number(event.target.value))}
         className="w-full min-w-0 rounded-2xl border border-white/10 bg-white/6 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/50"
       />
