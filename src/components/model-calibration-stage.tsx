@@ -5,8 +5,8 @@ import {
   type CalibrationPreviewPose,
 } from '@/lib/mirror/calibration'
 import type {
+  RigCalibration,
   ShirtCalibration,
-  SleeveCalibration,
   StageSize,
 } from '@/lib/mirror/types'
 
@@ -19,17 +19,15 @@ type CalibrationSceneControllerRuntime = Pick<
   | 'resize'
   | 'setCalibrations'
   | 'setJerseyOpacity'
-  | 'setSleeveOpacity'
+  | 'updateRigPose'
   | 'updateShirtTransform'
-  | 'updateSleeves'
 >
 
 const DEFAULT_CREATE_SCENE_CONTROLLER = () => new ShirtSceneController()
 export interface ModelCalibrationStageProps {
   shirtCalibration: ShirtCalibration
-  sleeveCalibration: SleeveCalibration
-  torsoOpacity: number
-  sleeveOpacity: number
+  rigCalibration: RigCalibration
+  garmentOpacity: number
   pose: CalibrationPreviewPose
   onStatusChange?: (status: string | null) => void
   createSceneController?: () => CalibrationSceneControllerRuntime
@@ -73,9 +71,8 @@ function useStageSize(stageRef: RefObject<HTMLDivElement | null>) {
 
 export function ModelCalibrationStage({
   shirtCalibration,
-  sleeveCalibration,
-  torsoOpacity,
-  sleeveOpacity,
+  rigCalibration,
+  garmentOpacity,
   pose,
   onStatusChange,
   createSceneController = DEFAULT_CREATE_SCENE_CONTROLLER,
@@ -93,9 +90,8 @@ export function ModelCalibrationStage({
         stageSize,
         pose,
         shirtCalibration,
-        sleeveCalibration,
       ),
-    [pose, shirtCalibration, sleeveCalibration, stageSize],
+    [pose, shirtCalibration, stageSize],
   )
 
   useEffect(() => {
@@ -140,20 +136,18 @@ export function ModelCalibrationStage({
     }
 
     controller.resize(stageSize)
-    controller.setCalibrations(shirtCalibration, sleeveCalibration)
-    controller.setJerseyOpacity(torsoOpacity)
-    controller.setSleeveOpacity(sleeveOpacity)
+    controller.setCalibrations(shirtCalibration, rigCalibration)
+    controller.setJerseyOpacity(garmentOpacity)
     controller.updateShirtTransform(previewScene.torsoTransform)
-    controller.updateSleeves(previewScene.leftSleeveTransform, previewScene.rightSleeveTransform)
+    controller.updateRigPose(previewScene.rigPose)
     controller.render()
   }, [
     assetsLoaded,
+    garmentOpacity,
     previewScene,
+    rigCalibration,
     shirtCalibration,
-    sleeveCalibration,
-    sleeveOpacity,
     stageSize,
-    torsoOpacity,
   ])
 
   return (

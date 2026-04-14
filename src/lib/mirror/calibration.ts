@@ -1,18 +1,17 @@
 import {
   LANDMARK_INDICES,
+  RIG_CALIBRATION,
   SHIRT_CALIBRATION,
-  SLEEVE_CALIBRATION,
 } from '@/lib/mirror/constants'
-import { computeSleeveTransform, computeTorsoTransform } from '@/lib/mirror/pose/torso'
-import { applySleeveRenderTwist } from '@/lib/mirror/sleeve-render'
+import { computeRigPose, computeTorsoTransform } from '@/lib/mirror/pose/torso'
 import type {
   Point2D,
   PoseFrame,
   PoseLandmark2D,
   PoseLandmark3D,
+  RigCalibration,
+  RigPose,
   ShirtCalibration,
-  SleeveCalibration,
-  SleeveTransform,
   StageSize,
   TorsoTransform,
 } from '@/lib/mirror/types'
@@ -31,7 +30,6 @@ export interface CalibrationPreviewPose {
 }
 
 export const DEFAULT_TORSO_OPACITY = 1
-export const DEFAULT_SLEEVE_OPACITY = 1
 
 export const DEFAULT_CALIBRATION_PREVIEW_POSE: CalibrationPreviewPose = {
   torsoCenterX: 0.5,
@@ -58,8 +56,7 @@ export interface CalibrationPreviewOverlay {
 
 export interface CalibrationPreviewScene {
   torsoTransform: TorsoTransform
-  leftSleeveTransform: SleeveTransform
-  rightSleeveTransform: SleeveTransform
+  rigPose: RigPose
   overlay: CalibrationPreviewOverlay
 }
 
@@ -72,14 +69,11 @@ export function cloneShirtCalibration(calibration: ShirtCalibration = SHIRT_CALI
   }
 }
 
-export function cloneSleeveCalibration(
-  calibration: SleeveCalibration = SLEEVE_CALIBRATION,
-): SleeveCalibration {
+export function cloneRigCalibration(
+  calibration: RigCalibration = RIG_CALIBRATION,
+): RigCalibration {
   return {
     ...calibration,
-    baseRotation: {
-      ...calibration.baseRotation,
-    },
   }
 }
 
@@ -87,7 +81,6 @@ export function buildCalibrationPreviewScene(
   stageSize: StageSize,
   pose: CalibrationPreviewPose,
   shirtCalibration: ShirtCalibration = SHIRT_CALIBRATION,
-  sleeveCalibration: SleeveCalibration = SLEEVE_CALIBRATION,
 ): CalibrationPreviewScene | null {
   if (!stageSize.width || !stageSize.height) {
     return null
@@ -108,39 +101,29 @@ export function buildCalibrationPreviewScene(
     return null
   }
 
-  const leftSleeveTransform = computeSleeveTransform(
-    poseFrame.leftArm,
+  const rigPose = computeRigPose(
+    poseFrame,
     torsoTransform,
     stageSize,
     coverLayout,
-    sleeveCalibration,
   )
-  const rightSleeveTransform = computeSleeveTransform(
-    poseFrame.rightArm,
-    torsoTransform,
-    stageSize,
-    coverLayout,
-    sleeveCalibration,
-  )
-
-  if (!leftSleeveTransform || !rightSleeveTransform) {
+  if (!rigPose) {
     return null
   }
 
   return {
     torsoTransform,
-    leftSleeveTransform: applySleeveRenderTwist(leftSleeveTransform),
-    rightSleeveTransform: applySleeveRenderTwist(rightSleeveTransform),
+    rigPose,
     overlay,
   }
 }
 
 export function buildCalibrationSnippet({
   shirtCalibration,
-  sleeveCalibration,
+  rigCalibration,
 }: {
   shirtCalibration: ShirtCalibration
-  sleeveCalibration: SleeveCalibration
+  rigCalibration: RigCalibration
 }) {
   return `export const SHIRT_CALIBRATION: ShirtCalibration = {
   scaleX: ${formatNumber(shirtCalibration.scaleX)},
@@ -157,21 +140,9 @@ export function buildCalibrationSnippet({
   },
 }
 
-export const SLEEVE_CALIBRATION: SleeveCalibration = {
-  scaleX: ${formatNumber(sleeveCalibration.scaleX)},
-  scaleY: ${formatNumber(sleeveCalibration.scaleY)},
-  scaleZ: ${formatNumber(sleeveCalibration.scaleZ)},
-  xOffset: ${formatNumber(sleeveCalibration.xOffset)},
-  yOffset: ${formatNumber(sleeveCalibration.yOffset)},
-  lineOffset: ${formatNumber(sleeveCalibration.lineOffset)},
-  zOffset: ${formatNumber(sleeveCalibration.zOffset)},
-  leftZRotationOffset: ${formatNumber(sleeveCalibration.leftZRotationOffset)},
-  rightZRotationOffset: ${formatNumber(sleeveCalibration.rightZRotationOffset)},
-  baseRotation: {
-    x: ${formatNumber(sleeveCalibration.baseRotation.x)},
-    y: ${formatNumber(sleeveCalibration.baseRotation.y)},
-    z: ${formatNumber(sleeveCalibration.baseRotation.z)},
-  },
+export const RIG_CALIBRATION: RigCalibration = {
+  leftArmZRotationOffset: ${formatNumber(rigCalibration.leftArmZRotationOffset)},
+  rightArmZRotationOffset: ${formatNumber(rigCalibration.rightArmZRotationOffset)},
 }`
 }
 

@@ -1,6 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BoxGeometry, Euler, Group, Mesh, MeshBasicMaterial, Quaternion, Vector3 } from 'three';
-import { SHIRT_CALIBRATION, SLEEVE_CALIBRATION } from '@/lib/mirror/constants';
+import {
+  Bone,
+  BoxGeometry,
+  Euler,
+  Float32BufferAttribute,
+  Group,
+  MeshBasicMaterial,
+  Quaternion,
+  Skeleton,
+  SkinnedMesh,
+  Uint16BufferAttribute,
+} from 'three';
+import { SHIRT_CALIBRATION } from '@/lib/mirror/constants';
 
 const rendererRender = vi.fn();
 const loaderLoadAsync = vi.fn();
@@ -60,65 +71,26 @@ describe('ShirtSceneController', () => {
     loaderLoadAsync.mockReset();
   });
 
-  it('applies the sleeve calibration rotation to the loaded sleeve models', async () => {
-    const torsoScene = new Group();
-    torsoScene.add(createNamedMesh('torso', 0));
-
-    const sleevesScene = new Group();
-    sleevesScene.add(createNamedMesh('left-sleeve', -20));
-    sleevesScene.add(createNamedMesh('right-sleeve', 20));
-
-    loaderLoadAsync.mockResolvedValueOnce(torsoScene).mockResolvedValueOnce(sleevesScene);
+  it('loads a rigged garment and resolves arm controls from the skeleton', async () => {
+    loaderLoadAsync.mockResolvedValueOnce({ scene: createRiggedScene() });
 
     const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
     const controller = new ShirtSceneController();
-
     const loadResult = await controller.loadShirtModel();
-
-    const leftSleeveRoot = (controller as any).leftSleeveModelRoot as Group | null;
-    const leftSleeveSize = (controller as any).leftSleeveModelSize as { x: number; y: number };
-    const rightSleeveRoot = (controller as any).rightSleeveModelRoot as Group | null;
-    const rightSleeveSize = (controller as any).rightSleeveModelSize as { x: number; y: number };
-    const expectedLeftRotation = new Quaternion().setFromEuler(
-      new Euler(Math.PI, 0, SLEEVE_CALIBRATION.leftZRotationOffset)
-    );
-    const expectedRightRotation = new Quaternion().setFromEuler(
-      new Euler(Math.PI, 0, SLEEVE_CALIBRATION.rightZRotationOffset)
-    );
-    const expectedLeftPivotPosition = new Vector3(leftSleeveSize.x * 0.5, leftSleeveSize.y * 0.5, 0)
-      .applyQuaternion(expectedLeftRotation)
-      .multiplyScalar(-1);
-    const expectedRightPivotPosition = new Vector3(-rightSleeveSize.x * 0.5, rightSleeveSize.y * 0.5, 0)
-      .applyQuaternion(expectedRightRotation)
-      .multiplyScalar(-1);
 
     expect(loadResult.usedFallback).toBe(false);
-    expect(leftSleeveRoot).toBeTruthy();
-    expect(rightSleeveRoot).toBeTruthy();
-    expect(leftSleeveRoot?.quaternion.angleTo(expectedLeftRotation)).toBeLessThan(1e-6);
-    expect(rightSleeveRoot?.quaternion.angleTo(expectedRightRotation)).toBeLessThan(1e-6);
-    expect(leftSleeveRoot?.position.x).toBeCloseTo(expectedLeftPivotPosition.x, 6);
-    expect(leftSleeveRoot?.position.y).toBeCloseTo(expectedLeftPivotPosition.y, 6);
-    expect(rightSleeveRoot?.position.x).toBeCloseTo(expectedRightPivotPosition.x, 6);
-    expect(rightSleeveRoot?.position.y).toBeCloseTo(expectedRightPivotPosition.y, 6);
+    expect((controller as any).leftArmControl).toBeTruthy();
+    expect((controller as any).rightArmControl).toBeTruthy();
   });
 
-  it('keeps the loaded torso model facing forward with the default calibration', async () => {
-    const torsoScene = new Group();
-    torsoScene.add(createNamedMesh('torso', 0));
-
-    const sleevesScene = new Group();
-    sleevesScene.add(createNamedMesh('left-sleeve', -20));
-    sleevesScene.add(createNamedMesh('right-sleeve', 20));
-
-    loaderLoadAsync.mockResolvedValueOnce(torsoScene).mockResolvedValueOnce(sleevesScene);
+  it('keeps the loaded model root aligned with the default base rotation', async () => {
+    loaderLoadAsync.mockResolvedValueOnce({ scene: createRiggedScene() });
 
     const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
     const controller = new ShirtSceneController();
+    await controller.loadShirtModel();
 
-    const loadResult = await controller.loadShirtModel();
-
-    const torsoModelRoot = (controller as any).modelRoot as Group | null;
+    const modelRoot = (controller as any).modelRoot as Group | null;
     const expectedRotation = new Quaternion().setFromEuler(
       new Euler(
         SHIRT_CALIBRATION.baseRotation.x,
@@ -127,163 +99,93 @@ describe('ShirtSceneController', () => {
       )
     );
 
-    expect(loadResult.usedFallback).toBe(false);
-    expect(torsoModelRoot).toBeTruthy();
-    expect(torsoModelRoot?.quaternion.angleTo(expectedRotation)).toBeLessThan(1e-6);
+    expect(modelRoot).toBeTruthy();
+    expect(modelRoot?.quaternion.angleTo(expectedRotation)).toBeLessThan(1e-6);
   });
 
-  it('positions sleeve anchors at the computed sleeve top so the mesh can pivot from the shoulder edge', async () => {
-    const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
-    const controller = new ShirtSceneController(undefined, {
-      scaleX: 1,
-      scaleY: 1,
-      scaleZ: 1,
-      xOffset: 0.4,
-      yOffset: 0.7,
-      lineOffset: 0,
-      zOffset: 0,
-      leftZRotationOffset: 0,
-      rightZRotationOffset: 0,
-      baseRotation: { x: 0, y: 0, z: 0 },
-    });
-    await loadMockModels(controller);
+  it('drives the arm bones from the rig pose instead of detached sleeve anchors', async () => {
+    loaderLoadAsync.mockResolvedValueOnce({ scene: createRiggedScene() });
 
-    controller.resize({ width: 200, height: 200 });
-    const sleeve = {
-      center: { x: 80, y: 120 },
-      lengthPx: 80,
-      shoulderWidthPx: 60,
-      elbowWidthPx: 50,
-      rotation: new Quaternion(),
-    };
-    for (let iteration = 0; iteration < 12; iteration += 1) {
-      controller.updateSleeves(sleeve, null);
-    }
-
-    const leftSleeveAnchor = (controller as any).leftSleeveAnchor as Group;
-    const leftSleeveReferenceOffset = (controller as any).leftSleeveReferenceOffset as Vector3;
-    const expectedReferenceX = 200 / 2 - 80;
-    const expectedReferenceY = 200 / 2 - 120;
-    const referencePoint = getSleeveReferencePoint(leftSleeveAnchor, leftSleeveReferenceOffset);
-
-    expect(referencePoint.x).toBeCloseTo(expectedReferenceX, 2);
-    expect(referencePoint.y).toBeCloseTo(expectedReferenceY, 2);
-  });
-
-  it('uses the default sleeve calibration for scale without extra screen-space drift', async () => {
     const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
     const controller = new ShirtSceneController();
-    await loadMockModels(controller);
+    await controller.loadShirtModel();
 
-    controller.resize({ width: 200, height: 200 });
-    const sleeve = {
-      center: { x: 100, y: 100 },
-      lengthPx: 80,
-      shoulderWidthPx: 60,
-      elbowWidthPx: 50,
-      rotation: new Quaternion(),
-    };
-    for (let iteration = 0; iteration < 12; iteration += 1) {
-      controller.updateSleeves(sleeve, null);
+    const leftBone = (controller as any).leftArmControl.bone as Bone;
+    const rightBone = (controller as any).rightArmControl.bone as Bone;
+    const leftBind = leftBone.quaternion.clone();
+    const rightBind = rightBone.quaternion.clone();
+
+    for (let index = 0; index < 12; index += 1) {
+      controller.updateRigPose({
+        leftArmZRotation: 1.8,
+        rightArmZRotation: 0.5,
+      });
     }
 
-    const leftSleeveAnchor = (controller as any).leftSleeveAnchor as Group;
-    const leftSleeveReferenceOffset = (controller as any).leftSleeveReferenceOffset as Vector3;
-    const leftSleeveModelSize = (controller as any).leftSleeveModelSize as Vector3;
-    const sleeveWidth = (60 + 50) / 2;
-    const expectedScaleX = (sleeveWidth / leftSleeveModelSize.x) * SLEEVE_CALIBRATION.scaleX;
-    const expectedScaleY = (80 / leftSleeveModelSize.y) * SLEEVE_CALIBRATION.scaleY;
-    const expectedScaleZ = (sleeveWidth / leftSleeveModelSize.z) * SLEEVE_CALIBRATION.scaleZ;
-    const referencePoint = getSleeveReferencePoint(leftSleeveAnchor, leftSleeveReferenceOffset);
-
-    expect(referencePoint.x).toBeCloseTo(0, 2);
-    expect(referencePoint.y).toBeCloseTo(0, 2);
-    expect(leftSleeveAnchor.scale.x).toBeCloseTo(expectedScaleX, 2);
-    expect(leftSleeveAnchor.scale.y).toBeCloseTo(expectedScaleY, 2);
-    expect(leftSleeveAnchor.scale.z).toBeCloseTo(expectedScaleZ, 2);
+    expect(leftBone.quaternion.angleTo(leftBind)).toBeGreaterThan(0.1);
+    expect(rightBone.quaternion.angleTo(rightBind)).toBeGreaterThan(0.1);
   });
 
-  it('keeps the tracked sleeve point aligned while the pivot moves around it during rotation', async () => {
+  it('falls back to the proxy garment when the rigged asset cannot be loaded', async () => {
+    loaderLoadAsync.mockRejectedValueOnce(new Error('load failed'));
+
     const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
-    const controller = new ShirtSceneController(undefined, {
-      scaleX: 1,
-      scaleY: 1,
-      scaleZ: 1,
-      xOffset: 0,
-      yOffset: 0,
-      lineOffset: 0,
-      zOffset: 0,
-      leftZRotationOffset: 0,
-      rightZRotationOffset: 0,
-      baseRotation: { x: 0, y: 0, z: 0 },
-    });
-    await loadMockModels(controller);
+    const controller = new ShirtSceneController();
+    const loadResult = await controller.loadShirtModel();
 
-    controller.resize({ width: 200, height: 200 });
-
-    const baseSleeve = {
-      center: { x: 100, y: 100 },
-      lengthPx: 1,
-      shoulderWidthPx: 1,
-      elbowWidthPx: 1,
-      rotation: new Quaternion(),
-    };
-
-    for (let iteration = 0; iteration < 12; iteration += 1) {
-      controller.updateSleeves(baseSleeve, null);
-    }
-
-    const leftSleeveAnchor = (controller as any).leftSleeveAnchor as Group;
-    const leftSleeveReferenceOffset = (controller as any).leftSleeveReferenceOffset as Vector3;
-    const anchorPositionBeforeRotation = leftSleeveAnchor.position.clone();
-    const referenceBeforeRotation = getSleeveReferencePoint(leftSleeveAnchor, leftSleeveReferenceOffset);
-
-    controller.updateSleeves(
-      {
-        ...baseSleeve,
-        rotation: new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), Math.PI / 2),
-      },
-      null
-    );
-    for (let iteration = 0; iteration < 11; iteration += 1) {
-      controller.updateSleeves(
-        {
-          ...baseSleeve,
-          rotation: new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), Math.PI / 2),
-        },
-        null
-      );
-    }
-
-    const referenceAfterRotation = getSleeveReferencePoint(leftSleeveAnchor, leftSleeveReferenceOffset);
-
-    expect(leftSleeveAnchor.quaternion.angleTo(new Quaternion())).toBeGreaterThan(0.1);
-    expect(referenceAfterRotation.distanceTo(referenceBeforeRotation)).toBeLessThan(1e-4);
-    expect(leftSleeveAnchor.position.distanceTo(anchorPositionBeforeRotation)).toBeGreaterThan(0.1);
+    expect(loadResult.usedFallback).toBe(true);
+    expect(loadResult.errorMessage).toMatch(/proxy jersey/i);
   });
 });
 
-function createNamedMesh(name: string, x: number) {
-  const mesh = new Mesh(new BoxGeometry(10, 10, 10), new MeshBasicMaterial());
-  mesh.name = name;
-  mesh.position.set(x, 0, 0);
-  return mesh;
-}
+function createRiggedScene() {
+  const root = new Bone();
+  root.name = 'root';
 
-async function loadMockModels(controller: { loadShirtModel: () => Promise<unknown> }) {
-  const torsoScene = new Group();
-  torsoScene.add(createNamedMesh('torso', 0));
+  const chest = new Bone();
+  chest.name = 'chest';
+  chest.position.set(0, 2, 0);
+  root.add(chest);
 
-  const sleevesScene = new Group();
-  sleevesScene.add(createNamedMesh('left-sleeve', -20));
-  sleevesScene.add(createNamedMesh('right-sleeve', 20));
+  const leftShoulder = new Bone();
+  leftShoulder.name = 'left_shoulder';
+  leftShoulder.position.set(-2, 0, 0);
+  chest.add(leftShoulder);
 
-  loaderLoadAsync.mockResolvedValueOnce(torsoScene).mockResolvedValueOnce(sleevesScene);
-  await controller.loadShirtModel();
-}
+  const leftArm = new Bone();
+  leftArm.name = 'left_arm';
+  leftArm.position.set(-3, -1, 0);
+  leftShoulder.add(leftArm);
 
-function getSleeveReferencePoint(anchor: Group, referenceOffset: Vector3) {
-  return anchor.position
-    .clone()
-    .add(referenceOffset.clone().multiply(anchor.scale).applyQuaternion(anchor.quaternion));
+  const rightShoulder = new Bone();
+  rightShoulder.name = 'right_shouler';
+  rightShoulder.position.set(2, 0, 0);
+  chest.add(rightShoulder);
+
+  const rightArm = new Bone();
+  rightArm.name = 'right_arm';
+  rightArm.position.set(3, -1, 0);
+  rightShoulder.add(rightArm);
+
+  const skeleton = new Skeleton([root, chest, leftShoulder, leftArm, rightShoulder, rightArm]);
+  const geometry = new BoxGeometry(10, 10, 10);
+  const vertexCount = geometry.getAttribute('position').count;
+  const skinIndices = new Uint16Array(vertexCount * 4);
+  const skinWeights = new Float32Array(vertexCount * 4);
+
+  for (let index = 0; index < vertexCount; index += 1) {
+    skinIndices[index * 4] = 0;
+    skinWeights[index * 4] = 1;
+  }
+
+  geometry.setAttribute('skinIndex', new Uint16BufferAttribute(skinIndices, 4));
+  geometry.setAttribute('skinWeight', new Float32BufferAttribute(skinWeights, 4));
+
+  const mesh = new SkinnedMesh(geometry, new MeshBasicMaterial());
+  mesh.bind(skeleton);
+
+  const scene = new Group();
+  scene.add(mesh);
+  scene.add(root);
+  return scene;
 }

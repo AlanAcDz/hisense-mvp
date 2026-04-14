@@ -1,24 +1,11 @@
-import { Euler, Vector3 } from 'three';
+import { Euler } from 'three';
 import {
-  computeSleeveTransform,
+  computeRigPose,
   computeTorsoTransform,
   createPoseFrame,
   getCoverLayout,
 } from '@/lib/mirror/pose/torso';
 import type { PoseLandmark2D, PoseLandmark3D } from '@/lib/mirror/types';
-
-const NEUTRAL_SLEEVE_CALIBRATION = {
-  scaleX: 1,
-  scaleY: 1,
-  scaleZ: 1,
-  xOffset: 0,
-  yOffset: 0,
-  lineOffset: 0,
-  zOffset: 0,
-  leftZRotationOffset: 0,
-  rightZRotationOffset: 0,
-  baseRotation: { x: 0, y: 0, z: 0 },
-} as const;
 
 function buildNormalizedLandmarks(visibility = 0.98) {
   const landmarks = Array.from({ length: 33 }, () => ({
@@ -109,108 +96,33 @@ describe('torso transform', () => {
     const roll = new Euler().setFromQuaternion(transform!.rotation).z;
     expect(Math.abs(roll)).toBeLessThan(Math.PI / 4);
   });
+});
 
-  it('extends sleeves farther down the upper arm with a thicker fit heuristic', () => {
+describe('rig pose', () => {
+  it('computes arm lift angles relative to the torso roll', () => {
     const poseFrame = createPoseFrame(buildNormalizedLandmarks(), buildWorldLandmarks(), 1000);
     const stageSize = { width: 1280, height: 720 };
     const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
     const torsoTransform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
+    const rigPose = computeRigPose(poseFrame, torsoTransform, stageSize, coverLayout);
 
-    expect(torsoTransform).not.toBeNull();
-
-    const sleeveTransform = computeSleeveTransform(
-      poseFrame?.leftArm ?? null,
-      torsoTransform!,
-      stageSize,
-      coverLayout,
-      NEUTRAL_SLEEVE_CALIBRATION
-    );
-    const expectedShoulder = { x: stageSize.width * 0.4, y: stageSize.height * 0.3 };
-    const expectedElbow = { x: stageSize.width * 0.3, y: stageSize.height * 0.47 };
-    const expectedArmLength = Math.hypot(
-      expectedElbow.x - expectedShoulder.x,
-      expectedElbow.y - expectedShoulder.y
-    );
-    expect(sleeveTransform).not.toBeNull();
-    expect(sleeveTransform?.lengthPx).toBeCloseTo(expectedArmLength * 0.64, 4);
-    expect(sleeveTransform?.center.x).toBeCloseTo(expectedShoulder.x, 4);
-    expect(sleeveTransform?.center.y).toBeCloseTo(expectedShoulder.y, 4);
-    expect(sleeveTransform?.shoulderWidthPx).toBeGreaterThan(torsoTransform!.widthPx * 0.27);
-    expect(sleeveTransform?.elbowWidthPx).toBeGreaterThan(expectedArmLength * 0.16);
+    expect(rigPose).not.toBeNull();
+    expect(rigPose?.leftArmZRotation).toBeCloseTo(-2.378555, 4);
+    expect(rigPose?.rightArmZRotation).toBeCloseTo(-0.763038, 4);
   });
 
-  it('keeps raised-arm sleeves anchored on the arm segment instead of drifting off-line', () => {
+  it('returns null arm rotations when the arm landmarks are not visible', () => {
     const normalizedLandmarks = buildNormalizedLandmarks();
-    normalizedLandmarks[11] = { x: 0.35, y: 0.38, z: 0, visibility: 0.98 };
-    normalizedLandmarks[13] = { x: 0.15, y: 0.38, z: 0, visibility: 0.98 };
+    normalizedLandmarks[13] = { ...normalizedLandmarks[13], visibility: 0.1 };
+
     const poseFrame = createPoseFrame(normalizedLandmarks, buildWorldLandmarks(), 1000);
     const stageSize = { width: 1280, height: 720 };
     const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
     const torsoTransform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
+    const rigPose = computeRigPose(poseFrame, torsoTransform, stageSize, coverLayout);
 
-    expect(torsoTransform).not.toBeNull();
-
-    const sleeveTransform = computeSleeveTransform(
-      poseFrame?.leftArm ?? null,
-      torsoTransform!,
-      stageSize,
-      coverLayout,
-      NEUTRAL_SLEEVE_CALIBRATION
-    );
-    const expectedShoulder = { x: stageSize.width * 0.35, y: stageSize.height * 0.38 };
-    const expectedElbow = { x: stageSize.width * 0.15, y: stageSize.height * 0.38 };
-
-    expect(sleeveTransform).not.toBeNull();
-    expect(sleeveTransform?.center.x).toBeCloseTo(expectedShoulder.x, 4);
-    expect(sleeveTransform?.center.y).toBeCloseTo(expectedShoulder.y, 4);
-  });
-
-  it('fades upward sleeve lift when the arm is horizontal', () => {
-    const normalizedLandmarks = buildNormalizedLandmarks();
-    normalizedLandmarks[11] = { x: 0.35, y: 0.38, z: 0, visibility: 0.98 };
-    normalizedLandmarks[13] = { x: 0.15, y: 0.38, z: 0, visibility: 0.98 };
-    const poseFrame = createPoseFrame(normalizedLandmarks, buildWorldLandmarks(), 1000);
-    const stageSize = { width: 1280, height: 720 };
-    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
-    const torsoTransform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
-
-    expect(torsoTransform).not.toBeNull();
-
-    const sleeveTransform = computeSleeveTransform(
-      poseFrame?.leftArm ?? null,
-      torsoTransform!,
-      stageSize,
-      coverLayout,
-      {
-        ...NEUTRAL_SLEEVE_CALIBRATION,
-        yOffset: 1,
-      }
-    );
-
-    expect(sleeveTransform).not.toBeNull();
-    expect(sleeveTransform?.center.y).toBeCloseTo(stageSize.height * 0.38, 4);
-  });
-
-  it('orients the sleeve axis toward the shoulder before model calibration is applied', () => {
-    const poseFrame = createPoseFrame(buildNormalizedLandmarks(), buildWorldLandmarks(), 1000);
-    const stageSize = { width: 1280, height: 720 };
-    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
-    const torsoTransform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
-
-    expect(torsoTransform).not.toBeNull();
-
-    const sleeveTransform = computeSleeveTransform(
-      poseFrame?.leftArm ?? null,
-      torsoTransform!,
-      stageSize,
-      coverLayout,
-      NEUTRAL_SLEEVE_CALIBRATION
-    );
-    const expectedDirection = new Vector3(stageSize.width * (0.4 - 0.3), stageSize.height * (0.3 - 0.47), 0)
-      .normalize();
-    const actualDirection = new Vector3(0, 1, 0).applyQuaternion(sleeveTransform!.rotation).normalize();
-
-    expect(sleeveTransform).not.toBeNull();
-    expect(actualDirection.angleTo(expectedDirection)).toBeLessThan(1e-6);
+    expect(rigPose).not.toBeNull();
+    expect(rigPose?.leftArmZRotation).toBeNull();
+    expect(rigPose?.rightArmZRotation).not.toBeNull();
   });
 });

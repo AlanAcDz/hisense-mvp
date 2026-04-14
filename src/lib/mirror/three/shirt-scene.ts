@@ -1,43 +1,59 @@
 import {
   AmbientLight,
+  Bone,
   Box3,
+  Color,
+  DoubleSide,
   DirectionalLight,
   Euler,
   Group,
   LoadingManager,
   Material,
   Mesh,
+  MeshStandardMaterial,
   Object3D,
   OrthographicCamera,
   Quaternion,
   Scene,
+  SkinnedMesh,
+  Texture,
   Vector3,
   WebGLRenderer,
 } from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkinnedModel } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import {
-  JERSEY_FRONT_MODEL_URL,
-  JERSEY_SLEEVES_MODEL_URL,
+  JERSEY_RIGGED_MODEL_URL,
+  RIG_CALIBRATION,
   SHIRT_CALIBRATION,
-  SLEEVE_CALIBRATION,
-  SLEEVE_MODEL_REFERENCE_RATIO,
 } from '@/lib/mirror/constants';
 import { smoothQuaternion, smoothVector3 } from '@/lib/mirror/pose/smoothing';
 import type {
+  RigCalibration,
+  RigPose,
   ShirtCalibration,
-  SleeveCalibration,
-  SleeveTransform,
   StageSize,
   TorsoTransform,
 } from '@/lib/mirror/types';
 import { createProxyShirtGroup } from '@/lib/mirror/three/proxy-shirt';
-import { createProxySleeveGroup } from '@/lib/mirror/three/proxy-sleeve';
 
 interface ShirtSceneLoadResult {
   errorMessage: string | null;
   usedFallback: boolean;
 }
+
+interface ControlledBone {
+  bone: Bone;
+  childBone: Bone;
+  bindQuaternion: Quaternion;
+  restAngle: number;
+  axisSign: 1 | -1;
+}
+
+const Z_AXIS = new Vector3(0, 0, 1);
+const LEFT_ARM_ALIASES = ['left_shoulder', 'left_shouler', 'left_upper_arm', 'left_arm'] as const;
+const RIGHT_ARM_ALIASES = ['right_shoulder', 'right_shouler', 'right_upper_arm', 'right_arm'] as const;
 
 export class ShirtSceneController {
   private readonly renderer: WebGLRenderer;
@@ -45,49 +61,27 @@ export class ShirtSceneController {
   private readonly camera: OrthographicCamera;
   private readonly shirtAnchor: Group;
   private calibration: ShirtCalibration;
-  private sleeveCalibration: SleeveCalibration;
+  private rigCalibration: RigCalibration;
   private stageSize: StageSize = { width: 1, height: 1 };
   private modelRoot: Object3D | null = null;
-  private torsoModelSource: Object3D | null = null;
+  private rigModelSource: Object3D | null = null;
   private modelSize = new Vector3(1, 1, 1);
   private currentPosition = new Vector3();
   private currentScale = new Vector3(1, 1, 1);
   private currentRotation = new Quaternion();
   private currentTorsoTransform: TorsoTransform | null = null;
+  private currentRigPose: RigPose | null = null;
   private jerseyOpacity = 1;
-  private sleeveOpacity = 1;
   private calibrationQuaternion = new Quaternion();
-  private leftSleeveCalibrationQuaternion = new Quaternion();
-  private rightSleeveCalibrationQuaternion = new Quaternion();
-  private sleeveModelReferenceRatio = SLEEVE_MODEL_REFERENCE_RATIO;
-
-  private readonly leftSleeveAnchor: Group;
-  private readonly rightSleeveAnchor: Group;
-  private leftSleeveModelRoot: Object3D | null = null;
-  private rightSleeveModelRoot: Object3D | null = null;
-  private leftSleeveModelSource: Object3D | null = null;
-  private rightSleeveModelSource: Object3D | null = null;
-  private leftSleeveModelSize = new Vector3(1, 1, 1);
-  private rightSleeveModelSize = new Vector3(1, 1, 1);
-  private leftSleevePivotPosition = new Vector3(0.5, 0.5, 0);
-  private rightSleevePivotPosition = new Vector3(-0.5, 0.5, 0);
-  private leftSleeveReferenceOffset = new Vector3();
-  private rightSleeveReferenceOffset = new Vector3();
-  private leftSleevePosition = new Vector3();
-  private leftSleeveScale = new Vector3(1, 1, 1);
-  private leftSleeveRotation = new Quaternion();
-  private currentLeftSleeveTransform: SleeveTransform | null = null;
-  private rightSleevePosition = new Vector3();
-  private rightSleeveScale = new Vector3(1, 1, 1);
-  private rightSleeveRotation = new Quaternion();
-  private currentRightSleeveTransform: SleeveTransform | null = null;
+  private leftArmControl: ControlledBone | null = null;
+  private rightArmControl: ControlledBone | null = null;
 
   constructor(
     calibration: ShirtCalibration = SHIRT_CALIBRATION,
-    sleeveCalibration: SleeveCalibration = SLEEVE_CALIBRATION
+    rigCalibration: RigCalibration = RIG_CALIBRATION
   ) {
     this.calibration = cloneShirtCalibration(calibration);
-    this.sleeveCalibration = cloneSleeveCalibration(sleeveCalibration);
+    this.rigCalibration = cloneRigCalibration(rigCalibration);
     this.renderer = new WebGLRenderer({
       alpha: true,
       antialias: true,
@@ -102,13 +96,6 @@ export class ShirtSceneController {
     this.shirtAnchor = new Group();
     this.shirtAnchor.visible = false;
 
-    this.leftSleeveAnchor = new Group();
-    this.leftSleeveAnchor.visible = false;
-
-    this.rightSleeveAnchor = new Group();
-    this.rightSleeveAnchor.visible = false;
-
-    // Angled lights preserve depth cues in the orthographic preview.
     const ambient = new AmbientLight(0xffffff, 0.5);
     const keyLight = new DirectionalLight(0xffffff, 1.05);
     keyLight.position.set(0.85, 0.35, 1.2);
@@ -117,16 +104,8 @@ export class ShirtSceneController {
     const topLight = new DirectionalLight(0xfff4de, 0.28);
     topLight.position.set(0, 1, 0.45);
 
-    this.scene.add(
-      ambient,
-      keyLight,
-      fillLight,
-      topLight,
-      this.shirtAnchor,
-      this.leftSleeveAnchor,
-      this.rightSleeveAnchor
-    );
-    this.refreshCalibrationQuaternions();
+    this.scene.add(ambient, keyLight, fillLight, topLight, this.shirtAnchor);
+    this.refreshCalibrationQuaternion();
   }
 
   get canvas() {
@@ -135,39 +114,28 @@ export class ShirtSceneController {
 
   async loadShirtModel() {
     const manager = new LoadingManager();
-    const fallbackMessages: string[] = [];
 
     try {
-      this.torsoModelSource = selectTorsoModel(await loadModelAsset(JERSEY_FRONT_MODEL_URL, manager));
-      this.attachTorsoModel(this.torsoModelSource.clone(true));
-    } catch (error) {
-      this.attachTorsoModel(createProxyShirtGroup());
-      fallbackMessages.push(
-        error instanceof Error
-          ? `${error.message} Using proxy jersey body instead.`
-          : 'Could not load the jersey body model. Using proxy jersey body instead.'
-      );
-    }
+      const riggedModel = await loadModelAsset(JERSEY_RIGGED_MODEL_URL, manager);
+      validateRiggedModel(riggedModel);
+      this.rigModelSource = riggedModel;
+      this.attachRiggedModel(cloneRigModel(this.rigModelSource));
 
-    try {
-      const jerseySleeves = await loadModelAsset(JERSEY_SLEEVES_MODEL_URL, manager);
-      const { leftSleeve, rightSleeve } = selectSleeveModels(jerseySleeves);
-      this.leftSleeveModelSource = leftSleeve;
-      this.rightSleeveModelSource = rightSleeve;
-      this.attachSleeveModels(this.leftSleeveModelSource.clone(true), this.rightSleeveModelSource.clone(true));
+      return {
+        errorMessage: null,
+        usedFallback: false,
+      } satisfies ShirtSceneLoadResult;
     } catch (error) {
-      this.attachSleeveModels(createProxySleeveGroup(), createProxySleeveGroup());
-      fallbackMessages.push(
-        error instanceof Error
-          ? `${error.message} Using proxy sleeves instead.`
-          : 'Could not load the sleeve model. Using proxy sleeves instead.'
-      );
-    }
+      this.attachRiggedModel(createProxyShirtGroup());
 
-    return {
-      errorMessage: fallbackMessages.length > 0 ? fallbackMessages.join(' ') : null,
-      usedFallback: fallbackMessages.length > 0,
-    } satisfies ShirtSceneLoadResult;
+      return {
+        errorMessage:
+          error instanceof Error
+            ? `${error.message} Using proxy jersey instead.`
+            : 'Could not load the rigged jersey model. Using proxy jersey instead.',
+        usedFallback: true,
+      } satisfies ShirtSceneLoadResult;
+    }
   }
 
   resize(stageSize: StageSize) {
@@ -187,50 +155,20 @@ export class ShirtSceneController {
     this.applyJerseyOpacity();
   }
 
-  setSleeveOpacity(opacity: number) {
-    this.sleeveOpacity = opacity;
-    this.applySleeveOpacity();
-  }
-
-  setSleeveModelReferenceRatio(ratio: number) {
-    if (this.sleeveModelReferenceRatio === ratio) {
-      return;
-    }
-
-    this.sleeveModelReferenceRatio = ratio;
-
-    if (this.leftSleeveModelSource && this.rightSleeveModelSource) {
-      this.attachSleeveModels(
-        this.leftSleeveModelSource.clone(true),
-        this.rightSleeveModelSource.clone(true)
-      );
-      this.updateSleeves(this.currentLeftSleeveTransform, this.currentRightSleeveTransform);
-    }
-  }
-
-  setCalibrations(calibration: ShirtCalibration, sleeveCalibration: SleeveCalibration) {
+  setCalibrations(calibration: ShirtCalibration, rigCalibration: RigCalibration) {
     const nextCalibration = cloneShirtCalibration(calibration);
-    const nextSleeveCalibration = cloneSleeveCalibration(sleeveCalibration);
-    const shouldReattachTorso = !sameEuler(this.calibration.baseRotation, nextCalibration.baseRotation);
-    const shouldReattachSleeves = !sameSleeveModelRotation(this.sleeveCalibration, nextSleeveCalibration);
+    const shouldReattachModel = !sameEuler(this.calibration.baseRotation, nextCalibration.baseRotation);
 
     this.calibration = nextCalibration;
-    this.sleeveCalibration = nextSleeveCalibration;
-    this.refreshCalibrationQuaternions();
+    this.rigCalibration = cloneRigCalibration(rigCalibration);
+    this.refreshCalibrationQuaternion();
 
-    if (shouldReattachTorso && this.torsoModelSource) {
-      this.attachTorsoModel(this.torsoModelSource.clone(true));
-    }
-
-    if (shouldReattachSleeves && this.leftSleeveModelSource && this.rightSleeveModelSource) {
-      this.attachSleeveModels(
-        this.leftSleeveModelSource.clone(true),
-        this.rightSleeveModelSource.clone(true)
-      );
+    if (shouldReattachModel && this.rigModelSource) {
+      this.attachRiggedModel(cloneRigModel(this.rigModelSource));
     }
 
     this.updateShirtTransform(this.currentTorsoTransform);
-    this.updateSleeves(this.currentLeftSleeveTransform, this.currentRightSleeveTransform);
+    this.updateRigPose(this.currentRigPose);
   }
 
   updateShirtTransform(transform: TorsoTransform | null) {
@@ -265,14 +203,18 @@ export class ShirtSceneController {
     this.shirtAnchor.quaternion.copy(this.currentRotation);
   }
 
-  updateSleeves(
-    leftSleeve: SleeveTransform | null,
-    rightSleeve: SleeveTransform | null
-  ) {
-    this.currentLeftSleeveTransform = leftSleeve;
-    this.currentRightSleeveTransform = rightSleeve;
-    this.applySleeve(this.leftSleeveAnchor, leftSleeve, 'left');
-    this.applySleeve(this.rightSleeveAnchor, rightSleeve, 'right');
+  updateRigPose(rigPose: RigPose | null) {
+    this.currentRigPose = rigPose;
+    this.applyBoneRotation(
+      this.leftArmControl,
+      rigPose?.leftArmZRotation ?? null,
+      this.rigCalibration.leftArmZRotationOffset
+    );
+    this.applyBoneRotation(
+      this.rightArmControl,
+      rigPose?.rightArmZRotation ?? null,
+      this.rigCalibration.rightArmZRotationOffset
+    );
   }
 
   render() {
@@ -283,7 +225,7 @@ export class ShirtSceneController {
     this.renderer.dispose();
   }
 
-  private refreshCalibrationQuaternions() {
+  private refreshCalibrationQuaternion() {
     this.calibrationQuaternion.setFromEuler(
       new Euler(
         this.calibration.baseRotation.x,
@@ -291,62 +233,31 @@ export class ShirtSceneController {
         this.calibration.baseRotation.z
       )
     );
-    this.leftSleeveCalibrationQuaternion.copy(buildSleeveCalibrationQuaternion(this.sleeveCalibration, 'left'));
-    this.rightSleeveCalibrationQuaternion.copy(
-      buildSleeveCalibrationQuaternion(this.sleeveCalibration, 'right')
-    );
   }
 
-  private applySleeve(
-    anchor: Group,
-    sleeve: SleeveTransform | null,
-    side: 'left' | 'right'
+  private applyBoneRotation(
+    control: ControlledBone | null,
+    targetAngle: number | null,
+    angleOffset: number
   ) {
-    if (!sleeve) {
-      anchor.visible = false;
+    if (!control) {
       return;
     }
 
-    anchor.visible = true;
-
-    const modelSize = side === 'left' ? this.leftSleeveModelSize : this.rightSleeveModelSize;
-    const referenceOffset =
-      side === 'left' ? this.leftSleeveReferenceOffset : this.rightSleeveReferenceOffset;
-    const sleeveWidth = (sleeve.shoulderWidthPx + sleeve.elbowWidthPx) / 2;
-    const targetReferencePosition = new Vector3(
-      this.stageSize.width / 2 - sleeve.center.x,
-      this.stageSize.height / 2 - sleeve.center.y,
-      this.shirtAnchor.position.z + this.sleeveCalibration.zOffset
-    );
-    const targetScale = new Vector3(
-      (sleeveWidth / Math.max(modelSize.x, 0.001)) * this.sleeveCalibration.scaleX,
-      (sleeve.lengthPx / Math.max(modelSize.y, 0.001)) * this.sleeveCalibration.scaleY,
-      (sleeveWidth / Math.max(modelSize.z, 0.001)) * this.sleeveCalibration.scaleZ
+    const deltaAngle =
+      targetAngle === null
+        ? 0
+        : normalizeAngle(targetAngle - control.restAngle + angleOffset);
+    const targetQuaternion = control.bindQuaternion.clone().multiply(
+      new Quaternion().setFromAxisAngle(Z_AXIS, control.axisSign * deltaAngle)
     );
 
-    const targetRotation = new Quaternion().copy(sleeve.rotation);
-    const targetPosition = targetReferencePosition.sub(
-      referenceOffset.clone().multiply(targetScale).applyQuaternion(targetRotation)
+    control.bone.quaternion.copy(
+      smoothQuaternion(control.bone.quaternion, targetQuaternion, 0.6)
     );
-
-    if (side === 'left') {
-      this.leftSleevePosition = smoothVector3(this.leftSleevePosition, targetPosition, 0.65);
-      this.leftSleeveScale = smoothVector3(this.leftSleeveScale, targetScale, 0.6);
-      this.leftSleeveRotation = smoothQuaternion(this.leftSleeveRotation, targetRotation, 0.65);
-      anchor.position.copy(this.leftSleevePosition);
-      anchor.scale.copy(this.leftSleeveScale);
-      anchor.quaternion.copy(this.leftSleeveRotation);
-    } else {
-      this.rightSleevePosition = smoothVector3(this.rightSleevePosition, targetPosition, 0.65);
-      this.rightSleeveScale = smoothVector3(this.rightSleeveScale, targetScale, 0.6);
-      this.rightSleeveRotation = smoothQuaternion(this.rightSleeveRotation, targetRotation, 0.65);
-      anchor.position.copy(this.rightSleevePosition);
-      anchor.scale.copy(this.rightSleeveScale);
-      anchor.quaternion.copy(this.rightSleeveRotation);
-    }
   }
 
-  private attachTorsoModel(nextModel: Object3D) {
+  private attachRiggedModel(nextModel: Object3D) {
     const { modelRoot, size } = this.replaceAnchorModel(
       this.shirtAnchor,
       this.modelRoot,
@@ -359,6 +270,12 @@ export class ShirtSceneController {
     this.currentScale.set(1, 1, 1);
     this.currentPosition.set(0, 0, 0);
     this.currentRotation.identity();
+
+    const rigControls = resolveRigControls(modelRoot);
+    this.leftArmControl = rigControls.leftArmControl;
+    this.rightArmControl = rigControls.rightArmControl;
+
+    this.applyRenderDefaults();
     this.applyJerseyOpacity();
   }
 
@@ -383,64 +300,37 @@ export class ShirtSceneController {
     });
   }
 
-  private applySleeveOpacity() {
-    applyOpacityToObject(this.leftSleeveModelRoot, this.sleeveOpacity);
-    applyOpacityToObject(this.rightSleeveModelRoot, this.sleeveOpacity);
-  }
+  private applyRenderDefaults() {
+    if (!this.modelRoot) {
+      return;
+    }
 
-  private attachSleeveModels(leftSleeve: Object3D, rightSleeve: Object3D) {
-    const leftAttachment = this.replaceAnchorModel(
-      this.leftSleeveAnchor,
-      this.leftSleeveModelRoot,
-      leftSleeve,
-      this.leftSleeveCalibrationQuaternion,
-    );
-    const rightAttachment = this.replaceAnchorModel(
-      this.rightSleeveAnchor,
-      this.rightSleeveModelRoot,
-      rightSleeve,
-      this.rightSleeveCalibrationQuaternion,
-    );
+    this.modelRoot.traverse((node) => {
+      if ((node as SkinnedMesh).isSkinnedMesh) {
+        const skinnedMesh = node as SkinnedMesh;
+        skinnedMesh.frustumCulled = false;
+        skinnedMesh.visible = true;
+        skinnedMesh.pose();
+      }
 
-    this.leftSleeveModelRoot = leftAttachment.modelRoot;
-    this.leftSleeveModelSize = leftAttachment.size;
-    this.rightSleeveModelRoot = rightAttachment.modelRoot;
-    this.rightSleeveModelSize = rightAttachment.size;
-    const leftSleevePivot = getSleevePivotData(
-      leftAttachment.bounds,
-      'left',
-      this.leftSleeveCalibrationQuaternion,
-      this.sleeveModelReferenceRatio
-    );
-    const rightSleevePivot = getSleevePivotData(
-      rightAttachment.bounds,
-      'right',
-      this.rightSleeveCalibrationQuaternion,
-      this.sleeveModelReferenceRatio
-    );
+      if (!isMeshObject(node)) {
+        return;
+      }
 
-    this.leftSleevePivotPosition = leftSleevePivot.position;
-    this.leftSleeveReferenceOffset = leftSleevePivot.referenceOffsetFromPivot;
-    this.rightSleevePivotPosition = rightSleevePivot.position;
-    this.rightSleeveReferenceOffset = rightSleevePivot.referenceOffsetFromPivot;
-    this.leftSleeveModelRoot.position.copy(this.leftSleevePivotPosition).multiplyScalar(-1);
-    this.rightSleeveModelRoot.position.copy(this.rightSleevePivotPosition).multiplyScalar(-1);
-    this.leftSleevePosition.set(0, 0, 0);
-    this.leftSleeveScale.set(1, 1, 1);
-    this.leftSleeveRotation.identity();
-    this.rightSleevePosition.set(0, 0, 0);
-    this.rightSleeveScale.set(1, 1, 1);
-    this.rightSleeveRotation.identity();
-    this.applySleeveOpacity();
+      if (Array.isArray(node.material)) {
+        node.material = node.material.map((material) => createRuntimeMaterial(material));
+        return;
+      }
+
+      node.material = createRuntimeMaterial(node.material);
+    });
   }
 
   private replaceAnchorModel(
     anchor: Group,
     currentModelRoot: Object3D | null,
     nextModel: Object3D,
-    baseQuaternion: Quaternion,
-    localOffsetDirection: Vector3 | null = null,
-    localOffsetFactor = 0
+    baseQuaternion: Quaternion
   ) {
     if (currentModelRoot) {
       anchor.remove(currentModelRoot);
@@ -451,21 +341,9 @@ export class ShirtSceneController {
 
     const box = new Box3().setFromObject(modelContainer);
     const center = box.getCenter(new Vector3());
-    const size = box.getSize(new Vector3());
     nextModel.position.sub(center);
-    if (localOffsetDirection && localOffsetFactor !== 0) {
-      const localOffset = localOffsetDirection
-        .clone()
-        .multiply(
-          new Vector3(
-            size.x * localOffsetFactor,
-            size.y * localOffsetFactor,
-            size.z * localOffsetFactor
-          )
-        );
-      nextModel.position.add(localOffset);
-    }
     modelContainer.updateWorldMatrix(true, true);
+
     const adjustedBounds = new Box3().setFromObject(modelContainer);
     const adjustedSize = adjustedBounds.getSize(new Vector3());
     modelContainer.quaternion.copy(baseQuaternion);
@@ -478,7 +356,6 @@ export class ShirtSceneController {
         Math.max(adjustedSize.y, 0.001),
         Math.max(adjustedSize.z, 0.001)
       ),
-      bounds: adjustedBounds.clone(),
     };
   }
 }
@@ -490,29 +367,8 @@ function applyOpacityToMaterial(material: Material, opacity: number) {
   material.needsUpdate = true;
 }
 
-function applyOpacityToObject(root: Object3D | null, opacity: number) {
-  if (!root) {
-    return;
-  }
-
-  root.traverse((node) => {
-    if (!isMeshObject(node)) {
-      return;
-    }
-
-    if (Array.isArray(node.material)) {
-      node.material.forEach((material) => applyOpacityToMaterial(material, opacity));
-      return;
-    }
-
-    if (node.material) {
-      applyOpacityToMaterial(node.material, opacity);
-    }
-  });
-}
-
-function isMeshObject(node: Object3D): node is Mesh {
-  return (node as Mesh).isMesh === true;
+function isMeshObject(node: Object3D): node is Mesh | SkinnedMesh {
+  return (node as Mesh).isMesh === true || (node as SkinnedMesh).isSkinnedMesh === true;
 }
 
 function cloneShirtCalibration(calibration: ShirtCalibration): ShirtCalibration {
@@ -524,12 +380,9 @@ function cloneShirtCalibration(calibration: ShirtCalibration): ShirtCalibration 
   };
 }
 
-function cloneSleeveCalibration(calibration: SleeveCalibration): SleeveCalibration {
+function cloneRigCalibration(calibration: RigCalibration): RigCalibration {
   return {
     ...calibration,
-    baseRotation: {
-      ...calibration.baseRotation,
-    },
   };
 }
 
@@ -540,112 +393,134 @@ function sameEuler(
   return first.x === second.x && first.y === second.y && first.z === second.z;
 }
 
-function sameSleeveModelRotation(first: SleeveCalibration, second: SleeveCalibration) {
-  return (
-    sameEuler(first.baseRotation, second.baseRotation) &&
-    first.leftZRotationOffset === second.leftZRotationOffset &&
-    first.rightZRotationOffset === second.rightZRotationOffset
-  );
+function normalizeAngle(angle: number) {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
 
-function buildSleeveCalibrationQuaternion(
-  calibration: SleeveCalibration,
-  side: 'left' | 'right'
-) {
-  const sideZRotation =
-    side === 'left' ? calibration.leftZRotationOffset : calibration.rightZRotationOffset;
+function validateRiggedModel(root: Object3D) {
+  let hasSkinnedMesh = false;
 
-  return new Quaternion().setFromEuler(
-    new Euler(
-      calibration.baseRotation.x,
-      calibration.baseRotation.y,
-      calibration.baseRotation.z + sideZRotation
-    )
-  );
-}
-
-function getSleevePivotData(
-  bounds: Box3,
-  side: 'left' | 'right',
-  baseQuaternion: Quaternion,
-  referenceRatio: number
-) {
-  const center = bounds.getCenter(new Vector3());
-  const size = bounds.getSize(new Vector3());
-  const position = new Vector3(
-    side === 'left' ? bounds.max.x : bounds.min.x,
-    bounds.max.y,
-    (bounds.min.z + bounds.max.z) / 2
-  ).applyQuaternion(baseQuaternion);
-  const referencePosition = new Vector3(
-    center.x,
-    bounds.max.y - size.y * referenceRatio,
-    center.z
-  ).applyQuaternion(baseQuaternion);
-
-  return {
-    position,
-    referenceOffsetFromPivot: referencePosition.sub(position),
-  };
-}
-
-function cloneWorldSpaceNode(node: Object3D) {
-  node.updateWorldMatrix(true, false);
-  const clone = node.clone(true);
-  clone.position.set(0, 0, 0);
-  clone.quaternion.identity();
-  clone.scale.set(1, 1, 1);
-  clone.applyMatrix4(node.matrixWorld);
-  return clone;
-}
-
-function collectRenderableParts(root: Object3D) {
-  const parts: Array<{ center: Vector3; node: Object3D }> = [];
-  root.updateWorldMatrix(true, true);
-
-  root.traverse((child) => {
-    const renderableChild = child as Object3D & {
-      geometry?: object;
-      isMesh?: boolean;
-      isSkinnedMesh?: boolean;
-    };
-    if (!renderableChild.geometry || (!renderableChild.isMesh && !renderableChild.isSkinnedMesh)) {
-      return;
+  root.traverse((node) => {
+    if ((node as SkinnedMesh).isSkinnedMesh) {
+      hasSkinnedMesh = true;
     }
-
-    const box = new Box3().setFromObject(child);
-    if (box.isEmpty()) {
-      return;
-    }
-
-    const center = box.getCenter(new Vector3());
-    parts.push({
-      center,
-      node: cloneWorldSpaceNode(child),
-    });
   });
 
-  return parts;
+  if (!hasSkinnedMesh) {
+    throw new Error('The jersey model did not include a skinned mesh.');
+  }
 }
 
-function selectTorsoModel(root: Object3D) {
-  const parts = collectRenderableParts(root).sort(
-    (first, second) => Math.abs(first.center.x) - Math.abs(second.center.x)
-  );
+function resolveRigControls(root: Object3D) {
+  root.updateWorldMatrix(true, true);
+  const bonesByName = new Map<string, Bone>();
 
-  return parts[0]?.node ?? root.clone(true);
-}
-
-function selectSleeveModels(root: Object3D) {
-  const parts = collectRenderableParts(root).sort((first, second) => first.center.x - second.center.x);
-  const leftSleeve = parts[0]?.node ?? createProxySleeveGroup();
-  const rightSleeveSource = parts[parts.length - 1]?.node ?? createProxySleeveGroup();
-  const rightSleeve = rightSleeveSource === leftSleeve ? rightSleeveSource.clone(true) : rightSleeveSource;
+  root.traverse((node) => {
+    if ((node as Bone).isBone) {
+      bonesByName.set(node.name.toLowerCase(), node as Bone);
+    }
+  });
 
   return {
-    leftSleeve,
-    rightSleeve,
+    // The rig is authored in anatomical space for a front-facing jersey, so the
+    // model's left arm bone appears on the viewer's right side. We resolve the
+    // controls by visual side so the mirrored experience matches user movement.
+    leftArmControl: createControlledBone(findBoneByAliases(bonesByName, RIGHT_ARM_ALIASES)),
+    rightArmControl: createControlledBone(findBoneByAliases(bonesByName, LEFT_ARM_ALIASES)),
   };
+}
+
+function findBoneByAliases(
+  bonesByName: Map<string, Bone>,
+  aliases: readonly string[]
+) {
+  for (const alias of aliases) {
+    const match = bonesByName.get(alias.toLowerCase());
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+function createControlledBone(bone: Bone | null): ControlledBone | null {
+  if (!bone) {
+    return null;
+  }
+
+  const { controlBone, childBone } = selectArmControlBone(bone);
+  if (!childBone) {
+    return null;
+  }
+
+  const bindQuaternion = controlBone.quaternion.clone();
+  const restAngle = getChildWorldAngle(controlBone, childBone);
+  const restDirection = childBone
+    .getWorldPosition(new Vector3())
+    .sub(controlBone.getWorldPosition(new Vector3()))
+    .normalize();
+
+  if (restDirection.lengthSq() < 1e-6) {
+    return null;
+  }
+
+  const sampleRotation = new Quaternion().setFromAxisAngle(Z_AXIS, 0.1);
+  controlBone.quaternion.copy(bindQuaternion.clone().multiply(sampleRotation));
+  controlBone.updateWorldMatrix(true, true);
+  const rotatedAngle = getChildWorldAngle(controlBone, childBone);
+  const axisSign = normalizeAngle(rotatedAngle - restAngle) >= 0 ? 1 : -1;
+  controlBone.quaternion.copy(bindQuaternion);
+  controlBone.updateWorldMatrix(true, true);
+
+  return {
+    bone: controlBone,
+    childBone,
+    bindQuaternion,
+    restAngle,
+    axisSign,
+  };
+}
+
+function selectArmControlBone(bone: Bone) {
+  const directChild = bone.children.find((child) => (child as Bone).isBone) as Bone | undefined;
+  const parentBone = bone.parent && (bone.parent as Bone).isBone ? (bone.parent as Bone) : null;
+
+  if (
+    parentBone &&
+    !isTorsoBone(parentBone) &&
+    directChild
+  ) {
+    return {
+      controlBone: parentBone,
+      childBone: directChild,
+    };
+  }
+
+  return {
+    controlBone: bone,
+    childBone: directChild ?? bone,
+  };
+}
+
+function isTorsoBone(bone: Bone) {
+  const normalizedName = bone.name.toLowerCase();
+  return (
+    normalizedName.includes('root') ||
+    normalizedName.includes('spine') ||
+    normalizedName.includes('chest') ||
+    normalizedName.includes('torso') ||
+    normalizedName.includes('neck')
+  );
+}
+
+function getChildWorldAngle(bone: Bone, childBone: Bone) {
+  const childDirection = childBone
+    .getWorldPosition(new Vector3())
+    .sub(bone.getWorldPosition(new Vector3()))
+    .normalize();
+
+  return Math.atan2(childDirection.y, childDirection.x);
 }
 
 async function loadModelAsset(url: string, manager: LoadingManager) {
@@ -659,10 +534,102 @@ async function loadModelAsset(url: string, manager: LoadingManager) {
   if (extension === 'glb' || extension === 'gltf') {
     const loader = new GLTFLoader(manager);
     const model = await loader.loadAsync(url);
-    return model.scene;
+    return normalizeImportedScene(model.scene);
   }
 
   throw new Error(`Unsupported jersey model format ".${extension}" for ${url}`);
+}
+
+function cloneRigModel(model: Object3D) {
+  return cloneSkinnedModel(model);
+}
+
+function createRuntimeMaterial(source: Material) {
+  const candidate = source as Material & {
+    map?: Texture | null;
+    color?: Color;
+    emissiveMap?: Texture | null;
+    normalMap?: Texture | null;
+    roughnessMap?: Texture | null;
+    metalnessMap?: Texture | null;
+  };
+
+  const material = new MeshStandardMaterial({
+    color: candidate.color ? candidate.color.clone() : new Color(0xffffff),
+    map: candidate.map ?? null,
+    emissiveMap: candidate.emissiveMap ?? null,
+    normalMap: candidate.normalMap ?? null,
+    roughnessMap: candidate.roughnessMap ?? null,
+    metalnessMap: candidate.metalnessMap ?? null,
+    roughness: 0.82,
+    metalness: 0.06,
+    side: DoubleSide,
+  });
+
+  return material;
+}
+
+function normalizeImportedScene(scene: Object3D) {
+  const commonScale = getCommonTopLevelScale(scene);
+  if (commonScale && Math.abs(commonScale - 1) > 1e-3) {
+    scene.scale.multiplyScalar(1 / commonScale);
+  }
+
+  const commonQuaternion = getCommonTopLevelQuaternion(scene);
+  if (commonQuaternion && commonQuaternion.angleTo(new Quaternion()) > 1e-3) {
+    scene.quaternion.multiply(commonQuaternion.clone().invert());
+  }
+
+  return scene;
+}
+
+function getCommonTopLevelScale(scene: Object3D) {
+  const children = scene.children;
+  if (!children.length) {
+    return null;
+  }
+
+  let commonScale: number | null = null;
+
+  for (const child of children) {
+    const { x, y, z } = child.scale;
+    if (Math.abs(x - y) > 1e-4 || Math.abs(x - z) > 1e-4) {
+      return null;
+    }
+
+    if (commonScale === null) {
+      commonScale = x;
+      continue;
+    }
+
+    if (Math.abs(commonScale - x) > 1e-4) {
+      return null;
+    }
+  }
+
+  return commonScale;
+}
+
+function getCommonTopLevelQuaternion(scene: Object3D) {
+  const children = scene.children;
+  if (!children.length) {
+    return null;
+  }
+
+  let commonQuaternion: Quaternion | null = null;
+
+  for (const child of children) {
+    if (commonQuaternion === null) {
+      commonQuaternion = child.quaternion.clone();
+      continue;
+    }
+
+    if (commonQuaternion.angleTo(child.quaternion) > 1e-4) {
+      return null;
+    }
+  }
+
+  return commonQuaternion;
 }
 
 function getModelExtension(url: string) {

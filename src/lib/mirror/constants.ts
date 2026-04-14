@@ -1,13 +1,10 @@
-import type { ShirtCalibration, SleeveCalibration } from '@/lib/mirror/types'
+import type { RigCalibration, ShirtCalibration } from '@/lib/mirror/types'
 
 function withBaseUrl(path: string) {
   return `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
 }
 
-export const JERSEY_FRONT_MODEL_URL = withBaseUrl('/assets/models/playera_1.fbx')
-export const JERSEY_SLEEVES_MODEL_URL = withBaseUrl('/assets/models/playera_2.fbx')
-// export const JERSEY_FRONT_MODEL_URL = withBaseUrl('/assets/models/hisense-jersey-front.glb')
-// export const JERSEY_SLEEVES_MODEL_URL = withBaseUrl('/assets/models/hisense-jersey-sleeves.glb')
+export const JERSEY_RIGGED_MODEL_URL = withBaseUrl('/assets/models/jersey_mexico_rig.glb')
 export const BACKGROUND_ASSET_URL = withBaseUrl(
   '/assets/backgrounds/hisense-football-stadium-2026.jpg',
 )
@@ -24,7 +21,6 @@ export const REQUIRED_TORSO_INDICES = Object.values(LANDMARK_INDICES)
 export const TORSO_VISIBILITY_THRESHOLD = 0.5
 export const DETECTION_INTERVAL_MS = 33
 export const DETECTION_INPUT_LONG_EDGE_PX = 512
-export const SLEEVE_MODEL_REFERENCE_RATIO = 0
 export const POSE_CONFIDENCE = {
   minPoseDetectionConfidence: 0.6,
   minPosePresenceConfidence: 0.6,
@@ -53,21 +49,9 @@ export const SHIRT_CALIBRATION: ShirtCalibration = {
   },
 }
 
-export const SLEEVE_CALIBRATION: SleeveCalibration = {
-  scaleX: 1.4,
-  scaleY: 1.65,
-  scaleZ: 2.5,
-  xOffset: 0.2,
-  yOffset: 0.9,
-  lineOffset: 0.15,
-  zOffset: 14,
-  leftZRotationOffset: 0.25,
-  rightZRotationOffset: -0.25,
-  baseRotation: {
-    x: Math.PI,
-    y: 0,
-    z: 0,
-  },
+export const RIG_CALIBRATION: RigCalibration = {
+  leftArmZRotationOffset: 0,
+  rightArmZRotationOffset: 0,
 }
 
 export const POSE_CONNECTIONS: Array<[number, number]> = [

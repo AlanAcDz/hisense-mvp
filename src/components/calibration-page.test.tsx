@@ -1,21 +1,19 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { CalibrationPage } from '@/components/calibration-page'
-import { SHIRT_CALIBRATION, SLEEVE_CALIBRATION } from '@/lib/mirror/constants'
+import { RIG_CALIBRATION, SHIRT_CALIBRATION } from '@/lib/mirror/constants'
 import type { ModelCalibrationStageProps } from '@/components/model-calibration-stage'
 
 describe('CalibrationPage', () => {
   it('renders the default hardcoded values into the calibration stage and snippet', () => {
     function FakeStage({
       shirtCalibration,
-      torsoOpacity,
-      sleeveOpacity,
+      garmentOpacity,
     }: ModelCalibrationStageProps) {
       return (
         <div
           data-testid="calibration-stage"
           data-shirt-scale-x={String(shirtCalibration.scaleX)}
-          data-torso-opacity={String(torsoOpacity)}
-          data-sleeve-opacity={String(sleeveOpacity)}
+          data-garment-opacity={String(garmentOpacity)}
         />
       )
     }
@@ -26,10 +24,9 @@ describe('CalibrationPage', () => {
       'data-shirt-scale-x',
       String(SHIRT_CALIBRATION.scaleX),
     )
-    expect(screen.getByTestId('calibration-stage')).toHaveAttribute('data-torso-opacity', '1')
-    expect(screen.getByTestId('calibration-stage')).toHaveAttribute('data-sleeve-opacity', '1')
+    expect(screen.getByTestId('calibration-stage')).toHaveAttribute('data-garment-opacity', '1')
     expect(screen.getByTestId('calibration-snippet')).toHaveTextContent(
-      `lineOffset: ${SLEEVE_CALIBRATION.lineOffset}`,
+      `leftArmZRotationOffset: ${RIG_CALIBRATION.leftArmZRotationOffset}`,
     )
   })
 
@@ -50,6 +47,6 @@ describe('CalibrationPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /copy values/i }))
 
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining('SHIRT_CALIBRATION'))
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('SLEEVE_CALIBRATION'))
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('RIG_CALIBRATION'))
   })
 })

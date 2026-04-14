@@ -17,9 +17,8 @@ import {
 import { composeCaptureFrame, downloadDataUrl } from '@/lib/mirror/capture/compose-capture';
 import { BACKGROUND_ASSET_URL } from '@/lib/mirror/constants';
 import { drawPoseOverlay } from '@/lib/mirror/pose/drawing';
-import { computeSleeveTransform, computeTorsoTransform, getCoverLayout } from '@/lib/mirror/pose/torso';
+import { computeRigPose, computeTorsoTransform, getCoverLayout } from '@/lib/mirror/pose/torso';
 import { usePoseLandmarker } from '@/lib/mirror/pose/use-pose-landmarker';
-import { applySleeveRenderTwist } from '@/lib/mirror/sleeve-render';
 import { ShirtSceneController } from '@/lib/mirror/three/shirt-scene';
 import type { MirrorSceneState, StageSize } from '@/lib/mirror/types';
 
@@ -31,8 +30,8 @@ type ShirtSceneControllerRuntime = Pick<
   | 'render'
   | 'resize'
   | 'setJerseyOpacity'
+  | 'updateRigPose'
   | 'updateShirtTransform'
-  | 'updateSleeves'
 >;
 
 const DEFAULT_CREATE_SCENE_CONTROLLER = () => new ShirtSceneController();
@@ -339,7 +338,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         clearCanvas(currentForegroundCanvas, stageSize);
         currentPoseContext.clearRect(0, 0, stageSize.width, stageSize.height);
         currentController.updateShirtTransform(null);
-        currentController.updateSleeves(null, null);
+        currentController.updateRigPose(null);
 
         setSceneState((previous) =>
           previous.backgroundMode === 'loading' && previous.backgroundGuidance === null
@@ -371,28 +370,9 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
 
       const torsoTransform = computeTorsoTransform(nextPoseFrame, stageSize, coverLayout);
       currentController.updateShirtTransform(torsoTransform);
-
-      if (torsoTransform) {
-        const leftSleeveTransform = computeSleeveTransform(
-          nextPoseFrame?.leftArm ?? null,
-          torsoTransform,
-          stageSize,
-          coverLayout
-        );
-        const rightSleeveTransform = computeSleeveTransform(
-          nextPoseFrame?.rightArm ?? null,
-          torsoTransform,
-          stageSize,
-          coverLayout
-        );
-
-        currentController.updateSleeves(
-          leftSleeveTransform ? applySleeveRenderTwist(leftSleeveTransform) : null,
-          rightSleeveTransform ? applySleeveRenderTwist(rightSleeveTransform) : null
-        );
-      } else {
-        currentController.updateSleeves(null, null);
-      }
+      currentController.updateRigPose(
+        computeRigPose(nextPoseFrame, torsoTransform, stageSize, coverLayout)
+      );
 
       const backgroundMatte = resolveBackgroundMatte({
         segmentationFrame: nextSegmentationFrame,

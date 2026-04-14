@@ -90,12 +90,9 @@ export interface TorsoTransform {
   rotation: Quaternion;
 }
 
-export interface SleeveTransform {
-  center: Point2D;
-  lengthPx: number;
-  shoulderWidthPx: number;
-  elbowWidthPx: number;
-  rotation: Quaternion;
+export interface RigPose {
+  leftArmZRotation: number | null;
+  rightArmZRotation: number | null;
 }
 
 export type BackgroundMode = 'loading' | 'active' | 'paused';
@@ -135,19 +132,7 @@ export interface ShirtCalibration {
   };
 }
 
-export interface SleeveCalibration {
-  scaleX: number;
-  scaleY: number;
-  scaleZ: number;
-  xOffset: number;
-  yOffset: number;
-  lineOffset: number;
-  zOffset: number;
-  leftZRotationOffset: number;
-  rightZRotationOffset: number;
-  baseRotation: {
-    x: number;
-    y: number;
-    z: number;
-  };
+export interface RigCalibration {
+  leftArmZRotationOffset: number;
+  rightArmZRotationOffset: number;
 }

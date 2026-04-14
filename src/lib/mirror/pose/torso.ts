@@ -1,7 +1,6 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import {
   LANDMARK_INDICES,
-  SLEEVE_CALIBRATION,
   SHIRT_CALIBRATION,
   TORSO_VISIBILITY_THRESHOLD,
 } from '@/lib/mirror/constants';
@@ -12,9 +11,8 @@ import type {
   PoseFrame,
   PoseLandmark2D,
   PoseLandmark3D,
+  RigPose,
   ShirtCalibration,
-  SleeveCalibration,
-  SleeveTransform,
   StageSize,
   TorsoLandmarks,
   TorsoTransform,
@@ -44,6 +42,10 @@ function getStableScreenAngle(a: Point2D, b: Point2D) {
   const end = a.x <= b.x ? b : a;
 
   return Math.atan2(end.y - start.y, end.x - start.x);
+}
+
+function normalizeAngle(angle: number) {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
 
 export function getArmLandmarks(
@@ -243,67 +245,50 @@ export function computeTorsoTransform(
   };
 }
 
-export function computeSleeveTransform(
+function computeArmZRotation(
   arm: ArmLandmarks | null,
-  torsoTransform: TorsoTransform,
   stageSize: StageSize,
   coverLayout: CoverLayout,
-  calibration: SleeveCalibration = SLEEVE_CALIBRATION
-): SleeveTransform | null {
+  torsoRoll: number
+) {
   if (!arm || arm.minimumVisibility < TORSO_VISIBILITY_THRESHOLD) {
     return null;
   }
 
   const shoulderStage = mapNormalizedToStagePoint(arm.shoulder, stageSize, coverLayout);
   const elbowStage = mapNormalizedToStagePoint(arm.elbow, stageSize, coverLayout);
-  const armVector = {
-    x: elbowStage.x - shoulderStage.x,
-    y: elbowStage.y - shoulderStage.y,
-  };
-  const armLengthPx = distance2D(shoulderStage, elbowStage);
-  const armDirection = {
-    x: armVector.x / Math.max(armLengthPx, 0.001),
-    y: armVector.y / Math.max(armLengthPx, 0.001),
-  };
-  const shoulderWidthPx = Math.max(torsoTransform.widthPx * 0.34, armLengthPx * 0.24);
-  const elbowWidthPx = Math.max(shoulderWidthPx * 0.94, armLengthPx * 0.22);
-  const sleeveWidthPx = (shoulderWidthPx + elbowWidthPx) / 2;
-  const torsoToShoulder = {
-    x: shoulderStage.x - torsoTransform.center.x,
-    y: shoulderStage.y - torsoTransform.center.y,
-  };
-  const torsoToShoulderLength = Math.hypot(torsoToShoulder.x, torsoToShoulder.y);
-  const outwardDirection =
-    torsoToShoulderLength > 0.001
-      ? {
-          x: torsoToShoulder.x / torsoToShoulderLength,
-          y: torsoToShoulder.y / torsoToShoulderLength,
-        }
-      : { x: 0, y: 0 };
-  const upwardLiftWeight = Math.max(0, 1 - Math.abs(armDirection.x));
+  const screenAngle = Math.atan2(
+    shoulderStage.y - elbowStage.y,
+    elbowStage.x - shoulderStage.x
+  );
 
-  const center = {
-    x:
-      shoulderStage.x +
-      outwardDirection.x * sleeveWidthPx * calibration.xOffset,
-    y:
-      shoulderStage.y +
-      outwardDirection.y * sleeveWidthPx * calibration.xOffset -
-      sleeveWidthPx * calibration.yOffset * upwardLiftWeight * 0.5 -
-      armLengthPx * calibration.lineOffset,
-  };
+  return normalizeAngle(screenAngle - torsoRoll);
+}
 
-  const lengthPx = armLengthPx * 0.64;
-  const shoulderDir = new Vector3(-armDirection.x, -armDirection.y, 0).normalize();
+export function computeRigPose(
+  poseFrame: PoseFrame | null,
+  torsoTransform: TorsoTransform | null,
+  stageSize: StageSize,
+  coverLayout: CoverLayout
+): RigPose | null {
+  if (!poseFrame || !torsoTransform) {
+    return null;
+  }
 
-  const cylinderUp = new Vector3(0, 1, 0);
-  const rotation = new Quaternion().setFromUnitVectors(cylinderUp, shoulderDir);
+  const torsoRoll = new Euler().setFromQuaternion(torsoTransform.rotation).z;
 
   return {
-    center,
-    lengthPx,
-    shoulderWidthPx,
-    elbowWidthPx,
-    rotation,
+    leftArmZRotation: computeArmZRotation(
+      poseFrame.leftArm,
+      stageSize,
+      coverLayout,
+      torsoRoll
+    ),
+    rightArmZRotation: computeArmZRotation(
+      poseFrame.rightArm,
+      stageSize,
+      coverLayout,
+      torsoRoll
+    ),
   };
 }

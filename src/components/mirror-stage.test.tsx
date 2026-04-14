@@ -1,12 +1,11 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { MirrorStage } from '@/components/mirror-stage';
 import {
-  computeSleeveTransform,
+  computeRigPose,
   computeTorsoTransform,
   createPoseFrame,
   getCoverLayout,
 } from '@/lib/mirror/pose/torso';
-import { applySleeveRenderTwist } from '@/lib/mirror/sleeve-render';
 import type { LandmarkerFrame, PoseLandmark2D, PoseLandmark3D } from '@/lib/mirror/types';
 
 function buildNormalizedLandmarks(visibility = 0.98) {
@@ -57,8 +56,8 @@ describe('MirrorStage', () => {
     render: vi.fn(),
     resize: vi.fn(),
     setJerseyOpacity: vi.fn(),
+    updateRigPose: vi.fn(),
     updateShirtTransform: vi.fn(),
-    updateSleeves: vi.fn(),
   };
   let queuedFrames: FrameRequestCallback[] = [];
 
@@ -194,8 +193,8 @@ describe('MirrorStage', () => {
           render: shirtSceneSpies.render,
           resize: shirtSceneSpies.resize,
           setJerseyOpacity: shirtSceneSpies.setJerseyOpacity,
+          updateRigPose: shirtSceneSpies.updateRigPose,
           updateShirtTransform: shirtSceneSpies.updateShirtTransform,
-          updateSleeves: shirtSceneSpies.updateSleeves,
         })}
         usePoseLandmarkerRuntime={() => ({
           detectFrame: () => landmarkerFrame,
@@ -216,7 +215,7 @@ describe('MirrorStage', () => {
     ).toBe(true);
   });
 
-  it('applies the shared sleeve render twist before updating the live sleeves', async () => {
+  it('computes and forwards the live rig pose', async () => {
     const poseFrame = createPoseFrame(buildNormalizedLandmarks(), buildWorldLandmarks(), 1000);
     const landmarkerFrame: LandmarkerFrame = {
       poseFrame,
@@ -234,8 +233,8 @@ describe('MirrorStage', () => {
           render: shirtSceneSpies.render,
           resize: shirtSceneSpies.resize,
           setJerseyOpacity: shirtSceneSpies.setJerseyOpacity,
+          updateRigPose: shirtSceneSpies.updateRigPose,
           updateShirtTransform: shirtSceneSpies.updateShirtTransform,
-          updateSleeves: shirtSceneSpies.updateSleeves,
         })}
         usePoseLandmarkerRuntime={() => ({
           detectFrame: () => landmarkerFrame,
@@ -255,12 +254,10 @@ describe('MirrorStage', () => {
 
     expect(torsoTransform).not.toBeNull();
 
-    const expectedLeftSleeve = applySleeveRenderTwist(
-      computeSleeveTransform(poseFrame!.leftArm, torsoTransform!, stageSize, coverLayout)!
-    );
-    const sleeveCall = shirtSceneSpies.updateSleeves.mock.calls.find(([leftSleeve]) => Boolean(leftSleeve));
+    const expectedRigPose = computeRigPose(poseFrame, torsoTransform, stageSize, coverLayout);
+    const rigCall = shirtSceneSpies.updateRigPose.mock.calls.find(([rigPose]) => Boolean(rigPose));
 
-    expect(sleeveCall).toBeTruthy();
-    expect(sleeveCall?.[0]?.rotation.angleTo(expectedLeftSleeve.rotation)).toBeLessThan(1e-6);
+    expect(rigCall).toBeTruthy();
+    expect(rigCall?.[0]).toEqual(expectedRigPose);
   });
 });

@@ -2,19 +2,18 @@ import type { ComponentType, Dispatch, ReactNode, SetStateAction } from 'react'
 import { useMemo, useState } from 'react'
 import {
   buildCalibrationSnippet,
+  cloneRigCalibration,
   cloneShirtCalibration,
-  cloneSleeveCalibration,
   DEFAULT_CALIBRATION_PREVIEW_POSE,
-  DEFAULT_SLEEVE_OPACITY,
   DEFAULT_TORSO_OPACITY,
   type CalibrationPreviewPose,
 } from '@/lib/mirror/calibration'
 import {
+  RIG_CALIBRATION,
   SHIRT_CALIBRATION,
-  SLEEVE_CALIBRATION,
 } from '@/lib/mirror/constants'
 import { ModelCalibrationStage, type ModelCalibrationStageProps } from '@/components/model-calibration-stage'
-import type { ShirtCalibration, SleeveCalibration } from '@/lib/mirror/types'
+import type { RigCalibration, ShirtCalibration } from '@/lib/mirror/types'
 
 type CalibrationStageComponent = ComponentType<ModelCalibrationStageProps>
 
@@ -24,9 +23,8 @@ interface CalibrationPageProps {
 
 export function CalibrationPage({ StageComponent = ModelCalibrationStage }: CalibrationPageProps) {
   const [shirtCalibration, setShirtCalibration] = useState(() => cloneShirtCalibration(SHIRT_CALIBRATION))
-  const [sleeveCalibration, setSleeveCalibration] = useState(() => cloneSleeveCalibration(SLEEVE_CALIBRATION))
-  const [torsoOpacity, setTorsoOpacity] = useState(DEFAULT_TORSO_OPACITY)
-  const [sleeveOpacity, setSleeveOpacity] = useState(DEFAULT_SLEEVE_OPACITY)
+  const [rigCalibration, setRigCalibration] = useState(() => cloneRigCalibration(RIG_CALIBRATION))
+  const [garmentOpacity, setGarmentOpacity] = useState(DEFAULT_TORSO_OPACITY)
   const [pose, setPose] = useState<CalibrationPreviewPose>(DEFAULT_CALIBRATION_PREVIEW_POSE)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -35,9 +33,9 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
     () =>
       buildCalibrationSnippet({
         shirtCalibration,
-        sleeveCalibration,
+        rigCalibration,
       }),
-    [shirtCalibration, sleeveCalibration],
+    [shirtCalibration, rigCalibration],
   )
 
   async function copySnippet() {
@@ -56,9 +54,8 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
 
   function resetAll() {
     setShirtCalibration(cloneShirtCalibration(SHIRT_CALIBRATION))
-    setSleeveCalibration(cloneSleeveCalibration(SLEEVE_CALIBRATION))
-    setTorsoOpacity(DEFAULT_TORSO_OPACITY)
-    setSleeveOpacity(DEFAULT_SLEEVE_OPACITY)
+    setRigCalibration(cloneRigCalibration(RIG_CALIBRATION))
+    setGarmentOpacity(DEFAULT_TORSO_OPACITY)
     setPose(DEFAULT_CALIBRATION_PREVIEW_POSE)
     setCopyState('idle')
   }
@@ -76,7 +73,7 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
                 Static jersey tuning lab
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-                Adjust the same hardcoded shirt and sleeve settings against a deterministic pose preview,
+                Adjust the hardcoded garment root and arm rig settings against a deterministic pose preview,
                 then copy the generated constants back into the code.
               </p>
             </div>
@@ -109,9 +106,8 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
         <div className="panel min-h-[28rem] overflow-hidden rounded-[2rem] p-3 sm:p-4 xl:min-h-0">
           <StageComponent
             shirtCalibration={shirtCalibration}
-            sleeveCalibration={sleeveCalibration}
-            torsoOpacity={torsoOpacity}
-            sleeveOpacity={sleeveOpacity}
+            rigCalibration={rigCalibration}
+            garmentOpacity={garmentOpacity}
             pose={pose}
             onStatusChange={setStatusMessage}
           />
@@ -124,20 +120,12 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
             </p>
             <div className="mt-4 grid gap-4">
               <NumberSliderControl
-                label="Torso Opacity"
-                value={torsoOpacity}
+                label="Garment Opacity"
+                value={garmentOpacity}
                 min={0}
                 max={1}
                 step={0.01}
-                onChange={setTorsoOpacity}
-              />
-              <NumberSliderControl
-                label="Sleeve Opacity"
-                value={sleeveOpacity}
-                min={0}
-                max={1}
-                step={0.01}
-                onChange={setSleeveOpacity}
+                onChange={setGarmentOpacity}
               />
             </div>
           </section>
@@ -253,106 +241,22 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
               />
             </ControlSection>
 
-            <ControlSection title="Sleeve Calibration">
+            <ControlSection title="Rig Calibration">
               <NumberSliderControl
-                label="Scale X"
-                value={sleeveCalibration.scaleX}
-                min={0.2}
-                max={3}
-                step={0.01}
-                onChange={(value) => updateSleeveCalibration(setSleeveCalibration, 'scaleX', value)}
-              />
-              <NumberSliderControl
-                label="Scale Y"
-                value={sleeveCalibration.scaleY}
-                min={0.2}
-                max={3}
-                step={0.01}
-                onChange={(value) => updateSleeveCalibration(setSleeveCalibration, 'scaleY', value)}
-              />
-              <NumberSliderControl
-                label="Scale Z"
-                value={sleeveCalibration.scaleZ}
-                min={0.2}
-                max={3}
-                step={0.01}
-                onChange={(value) => updateSleeveCalibration(setSleeveCalibration, 'scaleZ', value)}
-              />
-              <NumberSliderControl
-                label="X Offset"
-                value={sleeveCalibration.xOffset}
-                min={-1}
-                max={1}
-                step={0.01}
-                onChange={(value) => updateSleeveCalibration(setSleeveCalibration, 'xOffset', value)}
-              />
-              <NumberSliderControl
-                label="Y Offset"
-                value={sleeveCalibration.yOffset}
-                min={-1}
-                max={1.5}
-                step={0.01}
-                onChange={(value) => updateSleeveCalibration(setSleeveCalibration, 'yOffset', value)}
-              />
-              <NumberSliderControl
-                label="Line Offset"
-                value={sleeveCalibration.lineOffset}
-                min={-1}
-                max={1}
-                step={0.01}
-                onChange={(value) => updateSleeveCalibration(setSleeveCalibration, 'lineOffset', value)}
-              />
-              <NumberSliderControl
-                label="Z Offset"
-                value={sleeveCalibration.zOffset}
-                min={-200}
-                max={200}
-                step={1}
-                onChange={(value) => updateSleeveCalibration(setSleeveCalibration, 'zOffset', value)}
-              />
-              <NumberSliderControl
-                label="Left Rot Z"
-                value={sleeveCalibration.leftZRotationOffset}
+                label="Left Arm Rot Z"
+                value={rigCalibration.leftArmZRotationOffset}
                 min={-Math.PI}
                 max={Math.PI}
                 step={0.01}
-                onChange={(value) =>
-                  updateSleeveCalibration(setSleeveCalibration, 'leftZRotationOffset', value)
-                }
+                onChange={(value) => updateRigCalibration(setRigCalibration, 'leftArmZRotationOffset', value)}
               />
               <NumberSliderControl
-                label="Right Rot Z"
-                value={sleeveCalibration.rightZRotationOffset}
+                label="Right Arm Rot Z"
+                value={rigCalibration.rightArmZRotationOffset}
                 min={-Math.PI}
                 max={Math.PI}
                 step={0.01}
-                onChange={(value) =>
-                  updateSleeveCalibration(setSleeveCalibration, 'rightZRotationOffset', value)
-                }
-              />
-              <NumberSliderControl
-                label="Base Rot X"
-                value={sleeveCalibration.baseRotation.x}
-                min={-Math.PI}
-                max={Math.PI}
-                step={0.01}
-                onChange={(value) => updateSleeveRotation(setSleeveCalibration, 'x', value)}
-              />
-              <NumberSliderControl
-                label="Base Rot Y"
-                value={sleeveCalibration.baseRotation.y}
-                min={-Math.PI}
-                max={Math.PI}
-                step={0.01}
-                onChange={(value) => updateSleeveRotation(setSleeveCalibration, 'y', value)}
-              />
-              <NumberSliderControl
-                label="Base Rot Z"
-                value={sleeveCalibration.baseRotation.z}
-                min={-Math.PI}
-                max={Math.PI}
-                step={0.01}
-                onChange={(value) => updateSleeveRotation(setSleeveCalibration, 'z', value)}
+                onChange={(value) => updateRigCalibration(setRigCalibration, 'rightArmZRotationOffset', value)}
               />
             </ControlSection>
 
@@ -510,9 +414,9 @@ function updateShirtCalibration(
   }))
 }
 
-function updateSleeveCalibration(
-  setCalibration: Dispatch<SetStateAction<SleeveCalibration>>,
-  key: Exclude<keyof SleeveCalibration, 'baseRotation'>,
+function updateRigCalibration(
+  setCalibration: Dispatch<SetStateAction<RigCalibration>>,
+  key: keyof RigCalibration,
   value: number,
 ) {
   setCalibration((current) => ({
@@ -523,20 +427,6 @@ function updateSleeveCalibration(
 
 function updateRotation(
   setCalibration: Dispatch<SetStateAction<ShirtCalibration>>,
-  axis: 'x' | 'y' | 'z',
-  value: number,
-) {
-  setCalibration((current) => ({
-    ...current,
-    baseRotation: {
-      ...current.baseRotation,
-      [axis]: value,
-    },
-  }))
-}
-
-function updateSleeveRotation(
-  setCalibration: Dispatch<SetStateAction<SleeveCalibration>>,
   axis: 'x' | 'y' | 'z',
   value: number,
 ) {
