@@ -31,15 +31,17 @@ describe('background compositor', () => {
     expect(Array.from(copySegmentationAlpha(segmentationFrame))).toEqual([0, 0, 141, 255]);
   });
 
-  it('dilates and feathers the matte to soften clipped edges', () => {
+  it('keeps the matte soft without expanding it too far past the subject', () => {
     const alpha = new Float32Array(25);
     alpha[12] = 1;
     const segmentationFrame = createSegmentationFrame(5, 5, alpha);
 
     const matte = createBackgroundMatte(segmentationFrame);
 
-    expect(matte.alpha[12]).toBeGreaterThan(150);
+    expect(matte.alpha[12]).toBeGreaterThan(130);
     expect(matte.alpha[7]).toBeGreaterThan(0);
+    expect(matte.alpha[0]).toBeLessThan(128);
+    expect(matte.alpha[12]).toBeGreaterThan(matte.alpha[0] ?? 0);
     expect(matte.coverage).toBeGreaterThan(0);
   });
 
