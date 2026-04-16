@@ -25,7 +25,6 @@ describe('MirrorPage', () => {
     render(<MirrorPage StageComponent={FakeStage} />);
 
     expect(screen.getByRole('button', { name: /capture/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /focus sleeves/i })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('button', { name: /show pose points/i })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-jersey-opacity', '1');
     expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-show-points', 'false');
@@ -83,12 +82,11 @@ describe('MirrorPage', () => {
 
     render(<MirrorPage StageComponent={FakeStage} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /focus sleeves/i }));
     fireEvent.click(screen.getByRole('button', { name: /show pose points/i }));
     fireEvent.click(screen.getByRole('button', { name: /capture/i }));
 
     expect(screen.getByText(/using proxy sleeves instead/i)).toBeInTheDocument();
-    expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-jersey-opacity', '0.35');
+    expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-jersey-opacity', '1');
     expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-show-points', 'true');
     expect(captureSpy).toHaveBeenCalledTimes(1);
   });

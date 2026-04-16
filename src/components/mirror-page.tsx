@@ -6,8 +6,6 @@ import {
   type MirrorStageProps,
 } from '@/components/mirror-stage'
 
-const FOCUS_SLEEVES_TORSO_OPACITY = 0.35
-
 type MirrorStageComponent = ForwardRefExoticComponent<
   MirrorStageProps & RefAttributes<MirrorStageHandle>
 >
@@ -17,7 +15,6 @@ interface MirrorPageProps {
 }
 
 export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
-  const [jerseyOpacity, setJerseyOpacity] = useState(1)
   const [showPosePoints, setShowPosePoints] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const stageRef = useRef<MirrorStageHandle>(null)
@@ -37,7 +34,7 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
 
       <StageComponent
         ref={stageRef}
-        jerseyOpacity={jerseyOpacity}
+        jerseyOpacity={1}
         showPosePoints={showPosePoints}
         onStatusChange={setStatusMessage}
       />
@@ -56,17 +53,6 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
               onClick={() => stageRef.current?.capture()}
               className="rounded-full bg-[linear-gradient(135deg,_var(--hisense-cyan),_var(--hisense-blue))] px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] text-slate-950 transition hover:scale-[1.01]">
               Capture
-            </button>
-
-            <button
-              type="button"
-              aria-pressed={jerseyOpacity < 1}
-              onClick={() =>
-                setJerseyOpacity((current) => (current < 1 ? 1 : FOCUS_SLEEVES_TORSO_OPACITY))
-              }
-              className="rounded-full border border-white/14 bg-white/7 px-5 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white/92 transition hover:border-cyan-200/40 hover:bg-cyan-300/10"
-            >
-              {jerseyOpacity < 1 ? 'Restore Jersey' : 'Focus Sleeves'}
             </button>
 
             <button
