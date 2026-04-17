@@ -1,6 +1,7 @@
 import {
   copySegmentationAlpha,
   createBackgroundMatte,
+  dilateAlphaMask,
   drawBackgroundLayer,
   resolveBackgroundMatte,
 } from '@/lib/mirror/background/compositor';
@@ -43,6 +44,18 @@ describe('background compositor', () => {
     expect(matte.alpha[0]).toBeLessThan(128);
     expect(matte.alpha[12]).toBeGreaterThan(matte.alpha[0] ?? 0);
     expect(matte.coverage).toBeGreaterThan(0);
+  });
+
+  it('supports fractional dilation radii without sampling sparse half-pixels', () => {
+    const alpha = new Uint8ClampedArray(25);
+    alpha[12] = 255;
+
+    const dilated = dilateAlphaMask(alpha, 5, 5, 1.5);
+
+    expect(dilated[12]).toBe(255);
+    expect(dilated[7]).toBe(255);
+    expect(dilated[11]).toBe(255);
+    expect(dilated[0]).toBe(0);
   });
 
   it('reuses the last good matte while the new mask is temporarily missing', () => {

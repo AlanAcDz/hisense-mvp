@@ -90,20 +90,26 @@ export function dilateAlphaMask(
   }
 
   const dilated = new Uint8ClampedArray(alpha.length);
+  const maxOffset = Math.ceil(radius);
+  const radiusSquared = radius * radius;
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       let maxAlpha = 0;
 
-      for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+      for (let offsetY = -maxOffset; offsetY <= maxOffset; offsetY += 1) {
         const sampleY = y + offsetY;
         if (sampleY < 0 || sampleY >= height) {
           continue;
         }
 
-        for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+        for (let offsetX = -maxOffset; offsetX <= maxOffset; offsetX += 1) {
           const sampleX = x + offsetX;
           if (sampleX < 0 || sampleX >= width) {
+            continue;
+          }
+
+          if (offsetX * offsetX + offsetY * offsetY > radiusSquared) {
             continue;
           }
 

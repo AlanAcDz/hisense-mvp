@@ -26,7 +26,7 @@ describe('CalibrationPage', () => {
     )
     expect(screen.getByTestId('calibration-stage')).toHaveAttribute('data-garment-opacity', '1')
     expect(screen.getByTestId('calibration-snippet')).toHaveTextContent(
-      `leftArmZRotationOffset: ${RIG_CALIBRATION.leftArmZRotationOffset}`,
+      `leftArmZRotationOffset: ${Number(RIG_CALIBRATION.leftArmZRotationOffset.toFixed(6)).toString()}`,
     )
   })
 
