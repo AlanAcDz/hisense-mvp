@@ -69,7 +69,7 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
         </section>
       ) : (
         <section className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6">
-          <p className="max-w-2xl text-center text-2xl font-semibold leading-relaxed text-white sm:text-3xl md:text-4xl">
+          <p className="max-w-2xl text-center text-2xl font-semibold leading-relaxed text-white [text-shadow:_0_2px_12px_rgba(0,0,0,0.65)] sm:text-3xl md:text-4xl">
             Colócate frente a la pantalla para comenzar la experiencia
           </p>
         </section>
