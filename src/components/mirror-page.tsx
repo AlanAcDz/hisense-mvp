@@ -17,6 +17,7 @@ interface MirrorPageProps {
 export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
   const [showPosePoints, setShowPosePoints] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [subjectDetected, setSubjectDetected] = useState(false)
   const stageRef = useRef<MirrorStageHandle>(null)
 
   return (
@@ -37,6 +38,7 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
         jerseyOpacity={1}
         showPosePoints={showPosePoints}
         onStatusChange={setStatusMessage}
+        onSubjectDetectedChange={setSubjectDetected}
       />
 
       {import.meta.env.DEV ? (
@@ -67,13 +69,13 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
             </div>
           </div>
         </section>
-      ) : (
+      ) : subjectDetected ? (
         <section className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6">
           <p className="max-w-2xl text-center text-2xl font-semibold leading-relaxed text-white [text-shadow:_0_2px_12px_rgba(0,0,0,0.65)] sm:text-3xl md:text-4xl">
             Colócate frente a la pantalla para comenzar la experiencia
           </p>
         </section>
-      )}
+      ) : null}
     </main>
   )
 }

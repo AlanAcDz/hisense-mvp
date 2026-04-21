@@ -260,4 +260,49 @@ describe('MirrorStage', () => {
     expect(rigCall).toBeTruthy();
     expect(rigCall?.[0]).toEqual(expectedRigPose);
   });
+
+  it('notifies when subject detection changes', async () => {
+    let landmarkerFrame: LandmarkerFrame = {
+      poseFrame: createPoseFrame(buildNormalizedLandmarks(), buildWorldLandmarks(), 1000),
+      segmentationFrame: null,
+    };
+    const onSubjectDetectedChange = vi.fn();
+
+    render(
+      <MirrorStage
+        jerseyOpacity={0.1}
+        showPosePoints={false}
+        onSubjectDetectedChange={onSubjectDetectedChange}
+        createSceneController={() => ({
+          canvas: document.createElement('canvas'),
+          dispose: shirtSceneSpies.dispose,
+          loadShirtModel: shirtSceneSpies.loadShirtModel,
+          render: shirtSceneSpies.render,
+          resize: shirtSceneSpies.resize,
+          setJerseyOpacity: shirtSceneSpies.setJerseyOpacity,
+          updateRigPose: shirtSceneSpies.updateRigPose,
+          updateShirtTransform: shirtSceneSpies.updateShirtTransform,
+        })}
+        usePoseLandmarkerRuntime={() => ({
+          detectFrame: () => landmarkerFrame,
+          error: null,
+          isLoading: false,
+        })}
+      />
+    );
+
+    await waitFor(() => expect(getUserMediaMock).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    flushNextFrame();
+
+    expect(onSubjectDetectedChange).toHaveBeenCalledWith(true);
+
+    landmarkerFrame = {
+      poseFrame: null,
+      segmentationFrame: null,
+    };
+    flushNextFrame(1016);
+
+    expect(onSubjectDetectedChange).toHaveBeenLastCalledWith(false);
+  });
 });

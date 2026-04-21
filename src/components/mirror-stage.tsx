@@ -44,6 +44,7 @@ export interface MirrorStageProps {
   jerseyOpacity: number;
   showPosePoints: boolean;
   onStatusChange?: (status: string | null) => void;
+  onSubjectDetectedChange?: (detected: boolean) => void;
   createSceneController?: () => ShirtSceneControllerRuntime;
   usePoseLandmarkerRuntime?: () => Pick<
     ReturnType<typeof usePoseLandmarker>,
@@ -100,6 +101,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
     jerseyOpacity,
     showPosePoints,
     onStatusChange,
+    onSubjectDetectedChange,
     createSceneController = DEFAULT_CREATE_SCENE_CONTROLLER,
     usePoseLandmarkerRuntime = usePoseLandmarker,
   },
@@ -114,6 +116,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   const animationFrameRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const lastDetectAtRef = useRef(0);
+  const subjectDetectedRef = useRef(false);
   const sceneControllerRef = useRef<ShirtSceneControllerRuntime | null>(null);
   const backgroundImageRef = useRef<HTMLImageElement | null>(null);
   const matteCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -157,6 +160,22 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   useEffect(() => {
     onStatusChange?.(statusMessage);
   }, [onStatusChange, statusMessage]);
+
+  function syncSubjectDetected(detected: boolean) {
+    if (subjectDetectedRef.current === detected) {
+      return;
+    }
+
+    subjectDetectedRef.current = detected;
+    onSubjectDetectedChange?.(detected);
+  }
+
+  useEffect(
+    () => () => {
+      syncSubjectDetected(false);
+    },
+    [onSubjectDetectedChange]
+  );
 
   useEffect(() => {
     const backgroundImage = new Image();
@@ -334,6 +353,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       }
 
       if (!currentVideo.videoWidth || !currentVideo.videoHeight) {
+        syncSubjectDetected(false);
         clearCanvas(currentBackgroundCanvas, stageSize);
         clearCanvas(currentForegroundCanvas, stageSize);
         currentPoseContext.clearRect(0, 0, stageSize.width, stageSize.height);
@@ -369,6 +389,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       drawPoseOverlay(currentPoseContext, nextPoseFrame, stageSize, coverLayout, showPosePoints);
 
       const torsoTransform = computeTorsoTransform(nextPoseFrame, stageSize, coverLayout);
+      syncSubjectDetected(Boolean(torsoTransform));
       currentController.updateShirtTransform(torsoTransform);
       currentController.updateRigPose(
         computeRigPose(nextPoseFrame, torsoTransform, stageSize, coverLayout)
@@ -453,7 +474,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         animationFrameRef.current = null;
       }
     };
-  }, [detectFrame, showPosePoints, stageSize]);
+  }, [detectFrame, onSubjectDetectedChange, showPosePoints, stageSize]);
 
   useImperativeHandle(
     ref,
