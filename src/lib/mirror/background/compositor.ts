@@ -66,6 +66,78 @@ function getCoverLayoutForSource(
   };
 }
 
+function hasNumericProperty<Value extends string>(
+  value: unknown,
+  property: Value
+): value is Record<Value, number> {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  return typeof (value as Record<string, unknown>)[property] === 'number';
+}
+
+function hasBooleanProperty<Value extends string>(
+  value: unknown,
+  property: Value
+): value is Record<Value, boolean> {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  return typeof (value as Record<string, unknown>)[property] === 'boolean';
+}
+
+function getRenderableSourceSize(source: CanvasImageSource | null) {
+  if (!source) {
+    return null;
+  }
+
+  if (hasNumericProperty(source, 'videoWidth') && hasNumericProperty(source, 'videoHeight')) {
+    if (
+      (hasNumericProperty(source, 'readyState')
+        ? source.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+        : false) ||
+      source.videoWidth <= 0
+    ) {
+      return null;
+    }
+
+    return {
+      width: source.videoWidth,
+      height: source.videoHeight,
+    };
+  }
+
+  if (
+    hasNumericProperty(source, 'naturalWidth') &&
+    hasNumericProperty(source, 'naturalHeight') &&
+    hasBooleanProperty(source, 'complete')
+  ) {
+    if (!source.complete || source.naturalWidth <= 0) {
+      return null;
+    }
+
+    return {
+      width: source.naturalWidth,
+      height: source.naturalHeight,
+    };
+  }
+
+  if (hasNumericProperty(source, 'width') && hasNumericProperty(source, 'height')) {
+    if (source.width <= 0 || source.height <= 0) {
+      return null;
+    }
+
+    return {
+      width: source.width,
+      height: source.height,
+    };
+  }
+
+  return null;
+}
+
 export function copySegmentationAlpha(
   segmentationFrame: SegmentationFrame,
   threshold = BACKGROUND_MASK_THRESHOLD,
@@ -269,19 +341,21 @@ export function syncMatteCanvas(
 export function drawBackgroundLayer(
   ctx: CanvasRenderingContext2D,
   stageSize: StageSize,
-  backgroundImage: HTMLImageElement | null
+  backgroundSource: CanvasImageSource | null
 ) {
   ctx.clearRect(0, 0, stageSize.width, stageSize.height);
 
-  if (backgroundImage?.complete && backgroundImage.naturalWidth > 0) {
+  const sourceSize = getRenderableSourceSize(backgroundSource);
+
+  if (backgroundSource && sourceSize) {
     const coverLayout = getCoverLayoutForSource(
-      backgroundImage.naturalWidth,
-      backgroundImage.naturalHeight,
+      sourceSize.width,
+      sourceSize.height,
       stageSize
     );
 
     ctx.drawImage(
-      backgroundImage,
+      backgroundSource,
       coverLayout.offsetX,
       coverLayout.offsetY,
       coverLayout.width,

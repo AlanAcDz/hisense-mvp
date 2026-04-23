@@ -15,7 +15,7 @@ import {
   syncMatteCanvas,
 } from '@/lib/mirror/background/compositor';
 import { composeCaptureFrame, downloadDataUrl } from '@/lib/mirror/capture/compose-capture';
-import { BACKGROUND_ASSET_URL } from '@/lib/mirror/constants';
+import { BACKGROUND_VIDEO_ASSET_URL } from '@/lib/mirror/constants';
 import { drawPoseOverlay } from '@/lib/mirror/pose/drawing';
 import { computeRigPose, computeTorsoTransform, getCoverLayout } from '@/lib/mirror/pose/torso';
 import { usePoseLandmarker } from '@/lib/mirror/pose/use-pose-landmarker';
@@ -118,7 +118,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   const lastDetectAtRef = useRef(0);
   const subjectDetectedRef = useRef(false);
   const sceneControllerRef = useRef<ShirtSceneControllerRuntime | null>(null);
-  const backgroundImageRef = useRef<HTMLImageElement | null>(null);
+  const backgroundVideoRef = useRef<HTMLVideoElement | null>(null);
   const matteCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const syncedMatteTimestampRef = useRef<number | null>(null);
   const lastGoodMatteRef = useRef<ReturnType<typeof resolveBackgroundMatte>['matte']>(null);
@@ -178,12 +178,21 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   );
 
   useEffect(() => {
-    const backgroundImage = new Image();
-    backgroundImage.src = BACKGROUND_ASSET_URL;
-    backgroundImageRef.current = backgroundImage;
+    const backgroundVideo = document.createElement('video');
+    backgroundVideo.src = BACKGROUND_VIDEO_ASSET_URL;
+    backgroundVideo.loop = true;
+    backgroundVideo.muted = true;
+    backgroundVideo.playsInline = true;
+    backgroundVideo.preload = 'auto';
+    backgroundVideoRef.current = backgroundVideo;
+
+    void backgroundVideo.play().catch(() => {
+      // Autoplay can be blocked transiently; the next render pass will keep
+      // using the gradient fallback until the media starts.
+    });
 
     return () => {
-      backgroundImageRef.current = null;
+      backgroundVideoRef.current = null;
     };
   }, []);
 
@@ -418,7 +427,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
           syncedMatteTimestampRef.current = nextMatte.timestamp;
         }
 
-        drawBackgroundLayer(currentBackgroundContext, stageSize, backgroundImageRef.current);
+        drawBackgroundLayer(currentBackgroundContext, stageSize, backgroundVideoRef.current);
         drawForegroundLayer({
           ctx: currentForegroundContext,
           coverLayout,

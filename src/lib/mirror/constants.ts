@@ -5,9 +5,7 @@ function withBaseUrl(path: string) {
 }
 
 export const JERSEY_RIGGED_MODEL_URL = withBaseUrl('/assets/models/jersey_mexico_rig_2.glb')
-export const BACKGROUND_ASSET_URL = withBaseUrl(
-  '/assets/backgrounds/hisense-football-stadium-2026.jpg',
-)
+export const BACKGROUND_VIDEO_ASSET_URL = withBaseUrl('/assets/backgrounds/background.mp4')
 export const LANDMARK_INDICES = {
   leftShoulder: 11,
   rightShoulder: 12,

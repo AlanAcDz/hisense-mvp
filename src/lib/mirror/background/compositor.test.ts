@@ -164,6 +164,40 @@ describe('background compositor', () => {
     expect(drawImage).toHaveBeenCalledWith(backgroundImage, -150, 0, 600, 300);
   });
 
+  it('draws a ready background video with cover sizing', () => {
+    const drawImage = vi.fn();
+    const ctx = {
+      clearRect: vi.fn(),
+      drawImage,
+      createLinearGradient: vi.fn(),
+      fillRect: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+    const backgroundVideo = document.createElement('video');
+
+    Object.defineProperty(backgroundVideo, 'readyState', {
+      configurable: true,
+      value: HTMLMediaElement.HAVE_CURRENT_DATA,
+    });
+    Object.defineProperty(backgroundVideo, 'videoWidth', {
+      configurable: true,
+      value: 1920,
+    });
+    Object.defineProperty(backgroundVideo, 'videoHeight', {
+      configurable: true,
+      value: 1080,
+    });
+
+    drawBackgroundLayer(ctx, { width: 300, height: 300 }, backgroundVideo);
+
+    expect(drawImage).toHaveBeenCalledWith(
+      backgroundVideo,
+      expect.closeTo(-116.66666666666667, 10),
+      0,
+      expect.closeTo(533.3333333333334, 10),
+      300
+    );
+  });
+
   it('draws the background image with cover sizing on a taller stage', () => {
     const drawImage = vi.fn();
     const ctx = {
