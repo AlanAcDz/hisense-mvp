@@ -28,7 +28,11 @@ const POSE_MODEL_URLS = {
 
 let poseLandmarkerPromise: Promise<PoseLandmarker> | null = null;
 let poseLandmarkerInstance: PoseLandmarker | null = null;
+let poseLandmarkerDelegate: 'CPU' | 'GPU' | null = null;
 let gpuDelegateCanvas: HTMLCanvasElement | OffscreenCanvas | null = null;
+
+const GPU_SEGMENTATION_FAILURE_LIMIT = 3;
+const GPU_SEGMENTATION_EMPTY_MAX_CONFIDENCE = 0.001;
 
 function getPoseModelUrl() {
   return POSE_MODEL_URLS[POSE_MODEL_VARIANT];
@@ -69,6 +73,20 @@ async function createPoseLandmarker(delegate: 'CPU' | 'GPU') {
   });
 }
 
+function disposePoseLandmarker() {
+  poseLandmarkerInstance?.close();
+  poseLandmarkerInstance = null;
+  poseLandmarkerPromise = null;
+  poseLandmarkerDelegate = null;
+}
+
+async function replacePoseLandmarker(delegate: 'CPU' | 'GPU') {
+  disposePoseLandmarker();
+  poseLandmarkerInstance = await createPoseLandmarker(delegate);
+  poseLandmarkerDelegate = delegate;
+  return poseLandmarkerInstance;
+}
+
 async function loadPoseLandmarker() {
   if (poseLandmarkerInstance) {
     return poseLandmarkerInstance;
@@ -79,6 +97,7 @@ async function loadPoseLandmarker() {
       if (POSE_USE_GPU_DELEGATE) {
         try {
           poseLandmarkerInstance = await createPoseLandmarker('GPU');
+          poseLandmarkerDelegate = 'GPU';
           return poseLandmarkerInstance;
         } catch {
           gpuDelegateCanvas = null;
@@ -86,10 +105,10 @@ async function loadPoseLandmarker() {
       }
 
       poseLandmarkerInstance = await createPoseLandmarker('CPU');
+      poseLandmarkerDelegate = 'CPU';
       return poseLandmarkerInstance;
     })().catch((error) => {
-      poseLandmarkerPromise = null;
-      poseLandmarkerInstance = null;
+      disposePoseLandmarker();
       throw error;
     });
   }
@@ -136,6 +155,25 @@ function copySegmentationFrame(
   };
 }
 
+export function isSegmentationFrameLikelyEmpty(
+  segmentationFrame: SegmentationFrame | null,
+  maxConfidenceFloor = GPU_SEGMENTATION_EMPTY_MAX_CONFIDENCE
+) {
+  if (!segmentationFrame) {
+    return true;
+  }
+
+  let maxConfidence = 0;
+  for (let index = 0; index < segmentationFrame.alpha.length; index += 1) {
+    maxConfidence = Math.max(maxConfidence, segmentationFrame.alpha[index] ?? 0);
+    if (maxConfidence > maxConfidenceFloor) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function getDetectionScale(videoWidth: number, videoHeight: number) {
   const longEdge = Math.max(videoWidth, videoHeight);
   if (!longEdge || longEdge <= DETECTION_INPUT_LONG_EDGE_PX) {
@@ -154,6 +192,8 @@ export function usePoseLandmarker() {
   });
   const detectionCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const detectionCanvasContextRef = useRef<CanvasRenderingContext2D | null>(null);
+  const gpuSegmentationFailureCountRef = useRef(0);
+  const fallbackInFlightRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -180,6 +220,29 @@ export function usePoseLandmarker() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  const fallbackToCpuDelegate = useCallback(() => {
+    if (fallbackInFlightRef.current || poseLandmarkerDelegate !== 'GPU') {
+      return;
+    }
+
+    fallbackInFlightRef.current = true;
+    setIsLoading(true);
+    setError(null);
+
+    void replacePoseLandmarker('CPU')
+      .then(() => {
+        gpuSegmentationFailureCountRef.current = 0;
+        setError(null);
+      })
+      .catch((loadError) => {
+        setError(loadError instanceof Error ? loadError.message : 'Unable to load pose model.');
+      })
+      .finally(() => {
+        fallbackInFlightRef.current = false;
+        setIsLoading(false);
+      });
   }, []);
 
   const detectFrame = useCallback(
@@ -234,22 +297,39 @@ export function usePoseLandmarker() {
         let nextFrame = frameRef.current;
 
         poseLandmarkerInstance.detectForVideo(detectionSource, now, (result) => {
+          const segmentationFrame = copySegmentationFrame(
+            result.segmentationMasks as
+              | { width: number; height: number; getAsFloat32Array(): Float32Array }[]
+              | undefined,
+            now
+          );
+          const hasPoseLandmarks = Boolean(result.landmarks[0]?.length);
+
+          if (poseLandmarkerDelegate === 'GPU') {
+            gpuSegmentationFailureCountRef.current =
+              hasPoseLandmarks && isSegmentationFrameLikelyEmpty(segmentationFrame)
+                ? gpuSegmentationFailureCountRef.current + 1
+                : 0;
+          } else {
+            gpuSegmentationFailureCountRef.current = 0;
+          }
+
           nextFrame = {
             poseFrame: createPoseFrame(
               mapPoseLandmarks(result.landmarks[0] as PoseLandmark2D[] | undefined),
               mapWorldLandmarks(result.worldLandmarks[0] as PoseLandmark3D[] | undefined),
               now
             ),
-            segmentationFrame: copySegmentationFrame(
-              result.segmentationMasks as
-                | { width: number; height: number; getAsFloat32Array(): Float32Array }[]
-                | undefined,
-              now
-            ),
+            segmentationFrame,
           } satisfies LandmarkerFrame;
         });
 
         frameRef.current = nextFrame;
+
+        if (gpuSegmentationFailureCountRef.current >= GPU_SEGMENTATION_FAILURE_LIMIT) {
+          fallbackToCpuDelegate();
+        }
+
         return nextFrame;
       } catch (detectError) {
         const message =
@@ -258,7 +338,7 @@ export function usePoseLandmarker() {
         return frameRef.current;
       }
     },
-    []
+    [fallbackToCpuDelegate]
   );
 
   return {
