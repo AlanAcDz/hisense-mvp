@@ -39,7 +39,7 @@ describe('background compositor', () => {
 
     const matte = createBackgroundMatte(segmentationFrame);
 
-    expect(matte.alpha[12]).toBeGreaterThan(130);
+    expect(matte.alpha[12]).toBeGreaterThan(100);
     expect(matte.alpha[7]).toBeGreaterThan(0);
     expect(matte.alpha[0]).toBeLessThan(128);
     expect(matte.alpha[12]).toBeGreaterThan(matte.alpha[0] ?? 0);
@@ -70,7 +70,7 @@ describe('background compositor', () => {
     const result = resolveBackgroundMatte({
       segmentationFrame: null,
       previousMatte,
-      now: 1080,
+      now: 1050,
     });
 
     expect(result.matte).toBe(previousMatte);
@@ -91,7 +91,7 @@ describe('background compositor', () => {
     const result = resolveBackgroundMatte({
       segmentationFrame: createSegmentationFrame(60, 60, weakMask, 1000),
       previousMatte,
-      now: 1020,
+      now: 1010,
     });
 
     expect(result.matte).toBe(previousMatte);

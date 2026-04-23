@@ -4,6 +4,8 @@ import {
   DETECTION_INPUT_LONG_EDGE_PX,
   DETECTION_INTERVAL_MS,
   POSE_CONFIDENCE,
+  POSE_MODEL_VARIANT,
+  POSE_USE_GPU_DELEGATE,
 } from '@/lib/mirror/constants';
 import { createPoseFrame } from '@/lib/mirror/pose/torso';
 import type {
@@ -15,11 +17,57 @@ import type {
 
 const MEDIAPIPE_WASM_URL =
   'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
-const POSE_MODEL_URL =
-  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task';
+const POSE_MODEL_URLS = {
+  lite:
+    'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task',
+  full:
+    'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task',
+  heavy:
+    'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task',
+} as const;
 
 let poseLandmarkerPromise: Promise<PoseLandmarker> | null = null;
 let poseLandmarkerInstance: PoseLandmarker | null = null;
+let gpuDelegateCanvas: HTMLCanvasElement | OffscreenCanvas | null = null;
+
+function getPoseModelUrl() {
+  return POSE_MODEL_URLS[POSE_MODEL_VARIANT];
+}
+
+function getGpuDelegateCanvas() {
+  if (gpuDelegateCanvas) {
+    return gpuDelegateCanvas;
+  }
+
+  if (typeof OffscreenCanvas !== 'undefined') {
+    gpuDelegateCanvas = new OffscreenCanvas(1, 1);
+    return gpuDelegateCanvas;
+  }
+
+  if (typeof document !== 'undefined') {
+    gpuDelegateCanvas = document.createElement('canvas');
+    return gpuDelegateCanvas;
+  }
+
+  return null;
+}
+
+async function createPoseLandmarker(delegate: 'CPU' | 'GPU') {
+  const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
+  const delegateCanvas = delegate === 'GPU' ? getGpuDelegateCanvas() : null;
+
+  return PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: getPoseModelUrl(),
+      ...(delegate === 'GPU' ? { delegate: 'GPU' as const } : {}),
+    },
+    ...(delegateCanvas ? { canvas: delegateCanvas } : {}),
+    runningMode: 'VIDEO',
+    numPoses: 1,
+    outputSegmentationMasks: true,
+    ...POSE_CONFIDENCE,
+  });
+}
 
 async function loadPoseLandmarker() {
   if (poseLandmarkerInstance) {
@@ -28,18 +76,22 @@ async function loadPoseLandmarker() {
 
   if (!poseLandmarkerPromise) {
     poseLandmarkerPromise = (async () => {
-      const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
-      poseLandmarkerInstance = await PoseLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: POSE_MODEL_URL,
-        },
-        runningMode: 'VIDEO',
-        numPoses: 1,
-        outputSegmentationMasks: true,
-        ...POSE_CONFIDENCE,
-      });
+      if (POSE_USE_GPU_DELEGATE) {
+        try {
+          poseLandmarkerInstance = await createPoseLandmarker('GPU');
+          return poseLandmarkerInstance;
+        } catch {
+          gpuDelegateCanvas = null;
+        }
+      }
+
+      poseLandmarkerInstance = await createPoseLandmarker('CPU');
       return poseLandmarkerInstance;
-    })();
+    })().catch((error) => {
+      poseLandmarkerPromise = null;
+      poseLandmarkerInstance = null;
+      throw error;
+    });
   }
 
   return poseLandmarkerPromise;

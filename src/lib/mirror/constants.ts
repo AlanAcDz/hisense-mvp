@@ -19,6 +19,8 @@ export const REQUIRED_TORSO_INDICES = Object.values(LANDMARK_INDICES)
 export const TORSO_VISIBILITY_THRESHOLD = 0.5
 export const DETECTION_INTERVAL_MS = 33
 export const DETECTION_INPUT_LONG_EDGE_PX = 960
+export const POSE_MODEL_VARIANT = 'full'
+export const POSE_USE_GPU_DELEGATE = false
 export const POSE_CONFIDENCE = {
   minPoseDetectionConfidence: 0.6,
   minPosePresenceConfidence: 0.6,
@@ -27,9 +29,9 @@ export const POSE_CONFIDENCE = {
 export const BACKGROUND_MASK_STALE_MS = 96
 export const BACKGROUND_MASK_THRESHOLD = 0.48
 export const BACKGROUND_MASK_ALPHA_CURVE = 0.85
-export const BACKGROUND_MASK_DILATION_RADIUS = 1.5
-export const BACKGROUND_MASK_FEATHER_PASSES = 3
-export const BACKGROUND_MASK_DRAW_BLUR_PX = 1.25
+export const BACKGROUND_MASK_DILATION_RADIUS = 1
+export const BACKGROUND_MASK_FEATHER_PASSES = 2
+export const BACKGROUND_MASK_DRAW_BLUR_PX = 0.5
 export const BACKGROUND_MASK_MIN_COVERAGE = 0.015
 
 export const SHIRT_CALIBRATION: ShirtCalibration = {
