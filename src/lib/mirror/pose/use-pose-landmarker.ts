@@ -3,8 +3,9 @@ import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import {
   DETECTION_INPUT_LONG_EDGE_PX,
   DETECTION_INTERVAL_MS,
+  MEDIAPIPE_WASM_URL,
   POSE_CONFIDENCE,
-  POSE_MODEL_VARIANT,
+  POSE_MODEL_URL,
   POSE_USE_GPU_DELEGATE,
 } from '@/lib/mirror/constants';
 import { createPoseFrame } from '@/lib/mirror/pose/torso';
@@ -15,17 +16,6 @@ import type {
   SegmentationFrame,
 } from '@/lib/mirror/types';
 
-const MEDIAPIPE_WASM_URL =
-  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
-const POSE_MODEL_URLS = {
-  lite:
-    'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task',
-  full:
-    'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task',
-  heavy:
-    'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task',
-} as const;
-
 let poseLandmarkerPromise: Promise<PoseLandmarker> | null = null;
 let poseLandmarkerInstance: PoseLandmarker | null = null;
 let poseLandmarkerDelegate: 'CPU' | 'GPU' | null = null;
@@ -33,10 +23,6 @@ let gpuDelegateCanvas: HTMLCanvasElement | OffscreenCanvas | null = null;
 
 const GPU_SEGMENTATION_FAILURE_LIMIT = 3;
 const GPU_SEGMENTATION_EMPTY_MAX_CONFIDENCE = 0.001;
-
-function getPoseModelUrl() {
-  return POSE_MODEL_URLS[POSE_MODEL_VARIANT];
-}
 
 function getGpuDelegateCanvas() {
   if (gpuDelegateCanvas) {
@@ -62,7 +48,7 @@ async function createPoseLandmarker(delegate: 'CPU' | 'GPU') {
 
   return PoseLandmarker.createFromOptions(vision, {
     baseOptions: {
-      modelAssetPath: getPoseModelUrl(),
+      modelAssetPath: POSE_MODEL_URL,
       ...(delegate === 'GPU' ? { delegate: 'GPU' as const } : {}),
     },
     ...(delegateCanvas ? { canvas: delegateCanvas } : {}),

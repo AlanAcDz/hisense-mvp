@@ -13,7 +13,8 @@
     "@tanstack/react-router": "^1.143.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "three": "^0.173.0"
+    "three": "^0.173.0",
+    "workbox-window": "^7.4.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
@@ -28,6 +29,7 @@
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.2",
     "vite": "^7.1.5",
+    "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.0.0"
   }
 }

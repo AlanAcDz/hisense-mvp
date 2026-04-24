@@ -1,4 +1,5 @@
-import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router';
+import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
+import { AppShell } from '@/components/app-shell';
 import { CalibrationRoute } from '@/routes/calibration';
 import { HomeRoute } from '@/routes/home';
 
@@ -11,11 +12,7 @@ function getRouterBasePath() {
 }
 
 const rootRoute = createRootRoute({
-  component: () => (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#0b3559_0%,_#04111e_48%,_#01060d_100%)] text-white">
-      <Outlet />
-    </div>
-  ),
+  component: AppShell,
 });
 
 const indexRoute = createRoute({

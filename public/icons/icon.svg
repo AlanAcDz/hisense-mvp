@@ -1,0 +1,32 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="132" fill="#03111F" />
+  <rect x="34" y="34" width="444" height="444" rx="112" fill="url(#surface)" />
+  <rect x="72" y="72" width="368" height="368" rx="92" stroke="url(#stroke)" stroke-width="10" />
+  <path
+    d="M156 150H208V230H304V150H356V362H304V276H208V362H156V150Z"
+    fill="white"
+  />
+  <path
+    d="M118 120C153 82 199 60 256 60C313 60 359 82 394 120"
+    stroke="#44D6FF"
+    stroke-width="18"
+    stroke-linecap="round"
+  />
+  <path
+    d="M118 392C153 430 199 452 256 452C313 452 359 430 394 392"
+    stroke="#44D6FF"
+    stroke-width="18"
+    stroke-linecap="round"
+  />
+  <defs>
+    <linearGradient id="surface" x1="74" y1="58" x2="430" y2="466" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A3357" />
+      <stop offset="0.5" stop-color="#0A7FD9" />
+      <stop offset="1" stop-color="#02203B" />
+    </linearGradient>
+    <linearGradient id="stroke" x1="72" y1="72" x2="440" y2="440" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#86EDFF" />
+      <stop offset="1" stop-color="#0CA6FF" />
+    </linearGradient>
+  </defs>
+</svg>

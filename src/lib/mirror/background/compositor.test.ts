@@ -85,7 +85,7 @@ describe('background compositor', () => {
       height: 10,
       alpha: new Uint8ClampedArray(100).fill(255),
       coverage: 1,
-      timestamp: 950,
+      timestamp: 980,
     };
 
     const result = resolveBackgroundMatte({

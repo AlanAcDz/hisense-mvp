@@ -6,6 +6,7 @@ function withBaseUrl(path: string) {
 
 export const JERSEY_RIGGED_MODEL_URL = withBaseUrl('/assets/models/jersey_mexico_rig_2.glb')
 export const BACKGROUND_VIDEO_ASSET_URL = withBaseUrl('/assets/backgrounds/background.mp4')
+export const MEDIAPIPE_WASM_URL = withBaseUrl('/assets/mediapipe/wasm')
 export const LANDMARK_INDICES = {
   leftShoulder: 11,
   rightShoulder: 12,
@@ -20,6 +21,10 @@ export const TORSO_VISIBILITY_THRESHOLD = 0.5
 export const DETECTION_INTERVAL_MS = 33
 export const DETECTION_INPUT_LONG_EDGE_PX = 960
 export const POSE_MODEL_VARIANT = 'full'
+export const POSE_MODEL_URLS = {
+  full: withBaseUrl('/assets/mediapipe/models/pose_landmarker_full.task'),
+} as const
+export const POSE_MODEL_URL = POSE_MODEL_URLS[POSE_MODEL_VARIANT]
 export const POSE_USE_GPU_DELEGATE = true
 export const POSE_CONFIDENCE = {
   minPoseDetectionConfidence: 0.6,
