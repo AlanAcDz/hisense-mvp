@@ -4,7 +4,7 @@ function withBaseUrl(path: string) {
   return `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`
 }
 
-export const JERSEY_RIGGED_MODEL_URL = withBaseUrl('/assets/models/jersey_mexico_rig_2.glb')
+export const JERSEY_RIGGED_MODEL_URL = withBaseUrl('/assets/models/jersey_mexico_rig.glb')
 export const BACKGROUND_VIDEO_ASSET_URL = withBaseUrl('/assets/backgrounds/background.mp4')
 export const MEDIAPIPE_WASM_URL = withBaseUrl('/assets/mediapipe/wasm')
 export const LANDMARK_INDICES = {
@@ -34,13 +34,13 @@ export const POSE_CONFIDENCE = {
 export const BACKGROUND_MASK_STALE_MS = 50
 export const BACKGROUND_MASK_THRESHOLD = 0.48
 export const BACKGROUND_MASK_ALPHA_CURVE = 0.85
-export const BACKGROUND_MASK_DILATION_RADIUS = 1
-export const BACKGROUND_MASK_FEATHER_PASSES = 2
-export const BACKGROUND_MASK_DRAW_BLUR_PX = 0.5
+export const BACKGROUND_MASK_DILATION_RADIUS = 0.75
+export const BACKGROUND_MASK_FEATHER_PASSES = 4
+export const BACKGROUND_MASK_DRAW_BLUR_PX = 5
 export const BACKGROUND_MASK_MIN_COVERAGE = 0.015
 
 export const SHIRT_CALIBRATION: ShirtCalibration = {
-  scaleX: 1.9,
+  scaleX: 1.65,
   scaleY: 1.25,
   scaleZ: 2.5,
   xOffset: 0,
@@ -57,8 +57,8 @@ export const SHIRT_CALIBRATION: ShirtCalibration = {
 export const RIG_CALIBRATION: RigCalibration = {
   // These offsets compensate for the sleeve meshes being authored at a stable
   // angle relative to the shoulder-arm bone chain in jersey_mexico_rig.glb.
-  leftArmZRotationOffset: -0.821592653589793,
-  rightArmZRotationOffset: 0.838407346410207,
+  leftArmZRotationOffset: -0.971592653589793,
+  rightArmZRotationOffset: 0.998407346410207,
 }
 
 export const POSE_CONNECTIONS: Array<[number, number]> = [
