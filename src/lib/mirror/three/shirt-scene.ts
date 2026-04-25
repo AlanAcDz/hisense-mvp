@@ -205,14 +205,19 @@ export class ShirtSceneController {
 
   updateRigPose(rigPose: RigPose | null) {
     this.currentRigPose = rigPose;
+    const smoothedTorsoRoll = new Euler().setFromQuaternion(this.currentRotation).z;
     this.applyBoneRotation(
       this.leftArmControl,
-      rigPose?.leftArmZRotation ?? null,
+      rigPose?.leftArmZRotation === null || rigPose?.leftArmZRotation === undefined
+        ? null
+        : normalizeAngle(rigPose.leftArmZRotation - smoothedTorsoRoll),
       this.rigCalibration.leftArmZRotationOffset
     );
     this.applyBoneRotation(
       this.rightArmControl,
-      rigPose?.rightArmZRotation ?? null,
+      rigPose?.rightArmZRotation === null || rigPose?.rightArmZRotation === undefined
+        ? null
+        : normalizeAngle(rigPose.rightArmZRotation - smoothedTorsoRoll),
       this.rigCalibration.rightArmZRotationOffset
     );
   }
@@ -253,7 +258,7 @@ export class ShirtSceneController {
     );
 
     control.bone.quaternion.copy(
-      smoothQuaternion(control.bone.quaternion, targetQuaternion, 0.6)
+      smoothQuaternion(control.bone.quaternion, targetQuaternion, 0.78)
     );
   }
 

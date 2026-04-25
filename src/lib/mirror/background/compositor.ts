@@ -4,6 +4,7 @@ import {
   BACKGROUND_MASK_DRAW_BLUR_PX,
   BACKGROUND_MASK_FEATHER_PASSES,
   BACKGROUND_MASK_MIN_COVERAGE,
+  BACKGROUND_MASK_STAY_THRESHOLD,
   BACKGROUND_MASK_STALE_MS,
   BACKGROUND_MASK_THRESHOLD,
 } from '@/lib/mirror/constants';
@@ -141,13 +142,28 @@ function getRenderableSourceSize(source: CanvasImageSource | null) {
 export function copySegmentationAlpha(
   segmentationFrame: SegmentationFrame,
   threshold = BACKGROUND_MASK_THRESHOLD,
-  alphaCurve = BACKGROUND_MASK_ALPHA_CURVE
+  alphaCurve = BACKGROUND_MASK_ALPHA_CURVE,
+  previousAlpha?: Uint8ClampedArray | null,
+  stayThreshold = BACKGROUND_MASK_STAY_THRESHOLD
 ) {
   const alpha = new Uint8ClampedArray(segmentationFrame.alpha.length);
+  const canUsePreviousAlpha = previousAlpha?.length === segmentationFrame.alpha.length;
+
   for (let index = 0; index < segmentationFrame.alpha.length; index += 1) {
-    const confidence = clamp01((segmentationFrame.alpha[index] - threshold) / (1 - threshold));
-    alpha[index] = Math.round(Math.pow(confidence, alphaCurve) * 255);
+    const wasForeground = canUsePreviousAlpha && (previousAlpha?.[index] ?? 0) >= 64;
+    const activeThreshold = wasForeground ? stayThreshold : threshold;
+    const rawConfidence = segmentationFrame.alpha[index] ?? 0;
+    const confidence = clamp01(
+      (rawConfidence - activeThreshold) / (1 - activeThreshold)
+    );
+    const curvedAlpha = Math.pow(confidence, alphaCurve) * 255;
+    alpha[index] = Math.round(
+      wasForeground && rawConfidence >= stayThreshold
+        ? Math.max(curvedAlpha, previousAlpha?.[index] ?? 0)
+        : curvedAlpha
+    );
   }
+
   return alpha;
 }
 
@@ -209,8 +225,11 @@ export function featherAlphaMask(
 
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
+        const index = y * width + x;
         let total = 0;
         let samples = 0;
+        let minAlpha = 255;
+        let maxAlpha = 0;
 
         for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
           const sampleY = y + offsetY;
@@ -224,12 +243,20 @@ export function featherAlphaMask(
               continue;
             }
 
-            total += current[sampleY * width + sampleX] ?? 0;
+            const sampleAlpha = current[sampleY * width + sampleX] ?? 0;
+            total += sampleAlpha;
             samples += 1;
+            minAlpha = Math.min(minAlpha, sampleAlpha);
+            maxAlpha = Math.max(maxAlpha, sampleAlpha);
           }
         }
 
-        next[y * width + x] = Math.round(total / Math.max(samples, 1));
+        const currentAlpha = current[index] ?? 0;
+        const averageAlpha = Math.round(total / Math.max(samples, 1));
+        const isEdgePixel = minAlpha < 240 && maxAlpha > 16;
+        next[index] = isEdgePixel
+          ? Math.round(currentAlpha * 0.45 + averageAlpha * 0.55)
+          : currentAlpha;
       }
     }
 
@@ -251,8 +278,15 @@ export function computeMaskCoverage(alpha: Uint8ClampedArray) {
   return solidPixels / Math.max(alpha.length, 1);
 }
 
-export function createBackgroundMatte(segmentationFrame: SegmentationFrame): BackgroundMatte {
-  const copiedAlpha = copySegmentationAlpha(segmentationFrame);
+export function createBackgroundMatte(
+  segmentationFrame: SegmentationFrame,
+  previousMatte?: BackgroundMatte | null
+): BackgroundMatte {
+  const previousAlpha =
+    previousMatte?.width === segmentationFrame.width && previousMatte.height === segmentationFrame.height
+      ? previousMatte.alpha
+      : null;
+  const copiedAlpha = copySegmentationAlpha(segmentationFrame, undefined, undefined, previousAlpha);
   const dilatedAlpha = dilateAlphaMask(
     copiedAlpha,
     segmentationFrame.width,
@@ -292,7 +326,7 @@ export function resolveBackgroundMatte({
       };
     }
 
-    const nextMatte = createBackgroundMatte(segmentationFrame);
+    const nextMatte = createBackgroundMatte(segmentationFrame, previousMatte);
     if (nextMatte.coverage >= minCoverage) {
       return {
         matte: nextMatte,

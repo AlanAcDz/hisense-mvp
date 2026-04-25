@@ -121,6 +121,7 @@ describe('ShirtSceneController', () => {
       controller.updateRigPose({
         leftArmZRotation: 1.8,
         rightArmZRotation: 0.5,
+        torsoRoll: 0,
       });
     }
 

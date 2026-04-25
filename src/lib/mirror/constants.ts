@@ -12,11 +12,20 @@ export const LANDMARK_INDICES = {
   rightShoulder: 12,
   leftElbow: 13,
   rightElbow: 14,
+  leftWrist: 15,
+  rightWrist: 16,
   leftHip: 23,
   rightHip: 24,
 } as const
 
-export const REQUIRED_TORSO_INDICES = Object.values(LANDMARK_INDICES)
+export const REQUIRED_TORSO_INDICES = [
+  LANDMARK_INDICES.leftShoulder,
+  LANDMARK_INDICES.rightShoulder,
+  LANDMARK_INDICES.leftElbow,
+  LANDMARK_INDICES.rightElbow,
+  LANDMARK_INDICES.leftHip,
+  LANDMARK_INDICES.rightHip,
+]
 export const TORSO_VISIBILITY_THRESHOLD = 0.5
 export const DETECTION_INTERVAL_MS = 33
 export const DETECTION_INPUT_LONG_EDGE_PX = 960
@@ -33,10 +42,11 @@ export const POSE_CONFIDENCE = {
 }
 export const BACKGROUND_MASK_STALE_MS = 50
 export const BACKGROUND_MASK_THRESHOLD = 0.48
+export const BACKGROUND_MASK_STAY_THRESHOLD = 0.4
 export const BACKGROUND_MASK_ALPHA_CURVE = 0.85
-export const BACKGROUND_MASK_DILATION_RADIUS = 0.75
-export const BACKGROUND_MASK_FEATHER_PASSES = 4
-export const BACKGROUND_MASK_DRAW_BLUR_PX = 5
+export const BACKGROUND_MASK_DILATION_RADIUS = 1
+export const BACKGROUND_MASK_FEATHER_PASSES = 2
+export const BACKGROUND_MASK_DRAW_BLUR_PX = 2
 export const BACKGROUND_MASK_MIN_COVERAGE = 0.015
 
 export const SHIRT_CALIBRATION: ShirtCalibration = {

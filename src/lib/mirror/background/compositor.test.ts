@@ -32,6 +32,21 @@ describe('background compositor', () => {
     expect(Array.from(copySegmentationAlpha(segmentationFrame))).toEqual([0, 0, 141, 255]);
   });
 
+  it('uses the previous alpha as hysteresis for unstable matte edge pixels', () => {
+    const segmentationFrame = createSegmentationFrame(
+      3,
+      1,
+      new Float32Array([0.39, 0.43, 0.47])
+    );
+    const previousAlpha = new Uint8ClampedArray([255, 255, 0]);
+
+    const alpha = copySegmentationAlpha(segmentationFrame, undefined, undefined, previousAlpha);
+
+    expect(alpha[0]).toBe(0);
+    expect(alpha[1]).toBeGreaterThan(64);
+    expect(alpha[2]).toBe(0);
+  });
+
   it('keeps the matte soft without expanding it too far past the subject', () => {
     const alpha = new Float32Array(25);
     alpha[12] = 1;

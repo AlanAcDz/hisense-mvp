@@ -19,6 +19,8 @@ function buildNormalizedLandmarks(visibility = 0.98) {
   landmarks[12] = { x: 0.6, y: 0.3, z: 0, visibility };
   landmarks[13] = { x: 0.3, y: 0.47, z: 0, visibility };
   landmarks[14] = { x: 0.7, y: 0.47, z: 0, visibility };
+  landmarks[15] = { x: 0.2, y: 0.64, z: 0, visibility };
+  landmarks[16] = { x: 0.8, y: 0.64, z: 0, visibility };
   landmarks[23] = { x: 0.43, y: 0.7, z: 0, visibility };
   landmarks[24] = { x: 0.57, y: 0.7, z: 0, visibility };
 
@@ -37,6 +39,8 @@ function buildWorldLandmarks(visibility = 0.98) {
   landmarks[12] = { x: 0.18, y: -0.08, z: -0.23, visibility };
   landmarks[13] = { x: -0.34, y: 0.08, z: -0.18, visibility };
   landmarks[14] = { x: 0.34, y: 0.08, z: -0.17, visibility };
+  landmarks[15] = { x: -0.48, y: 0.24, z: -0.17, visibility };
+  landmarks[16] = { x: 0.48, y: 0.24, z: -0.16, visibility };
   landmarks[23] = { x: -0.14, y: 0.38, z: -0.2, visibility };
   landmarks[24] = { x: 0.14, y: 0.38, z: -0.19, visibility };
 
@@ -109,6 +113,44 @@ describe('rig pose', () => {
     expect(rigPose).not.toBeNull();
     expect(rigPose?.leftArmZRotation).toBeCloseTo(-0.763038, 4);
     expect(rigPose?.rightArmZRotation).toBeCloseTo(-2.378555, 4);
+    expect(rigPose?.torsoRoll).toBeCloseTo(0, 4);
+  });
+
+  it('leans sleeve rotation toward the wrist when the arm is overhead', () => {
+    const normalizedLandmarks = buildNormalizedLandmarks();
+    normalizedLandmarks[11] = { x: 0.4, y: 0.4, z: 0, visibility: 0.98 };
+    normalizedLandmarks[13] = { x: 0.34, y: 0.22, z: 0, visibility: 0.98 };
+    normalizedLandmarks[15] = { x: 0.47, y: 0.08, z: 0, visibility: 0.98 };
+
+    const withoutWrist = buildNormalizedLandmarks();
+    withoutWrist[11] = normalizedLandmarks[11];
+    withoutWrist[13] = normalizedLandmarks[13];
+    withoutWrist[15] = { x: 0.47, y: 0.08, z: 0, visibility: 0.1 };
+
+    const worldLandmarks = buildWorldLandmarks();
+    const stageSize = { width: 1280, height: 720 };
+    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
+    const torsoTransform = computeTorsoTransform(
+      createPoseFrame(normalizedLandmarks, worldLandmarks, 1000),
+      stageSize,
+      coverLayout
+    );
+    const wristAwarePose = computeRigPose(
+      createPoseFrame(normalizedLandmarks, worldLandmarks, 1000),
+      torsoTransform,
+      stageSize,
+      coverLayout
+    );
+    const elbowOnlyPose = computeRigPose(
+      createPoseFrame(withoutWrist, worldLandmarks, 1000),
+      torsoTransform,
+      stageSize,
+      coverLayout
+    );
+
+    expect(wristAwarePose?.leftArmZRotation).not.toBeNull();
+    expect(elbowOnlyPose?.leftArmZRotation).not.toBeNull();
+    expect(Math.abs(wristAwarePose!.leftArmZRotation! - elbowOnlyPose!.leftArmZRotation!)).toBeGreaterThan(0.1);
   });
 
   it('returns null arm rotations when the arm landmarks are not visible', () => {

@@ -6,6 +6,12 @@ import type { CoverLayout } from '@/lib/mirror/types';
 const TORSO_COLOR = '#56d8ff';
 const LIMB_COLOR = 'rgba(255,255,255,0.72)';
 const FACE_COLOR = 'rgba(255, 200, 95, 0.9)';
+const TORSO_LANDMARK_INDICES = new Set<number>([
+  LANDMARK_INDICES.leftShoulder,
+  LANDMARK_INDICES.rightShoulder,
+  LANDMARK_INDICES.leftHip,
+  LANDMARK_INDICES.rightHip,
+]);
 
 export function drawPoseOverlay(
   ctx: CanvasRenderingContext2D,
@@ -52,7 +58,7 @@ export function drawPoseOverlay(
 
   poseFrame.normalizedLandmarks.forEach((landmark, index) => {
     const point = mapNormalizedToStagePoint(landmark, stageSize, coverLayout);
-    const isTorsoPoint = Object.values(LANDMARK_INDICES).includes(index as 11 | 12 | 23 | 24);
+    const isTorsoPoint = TORSO_LANDMARK_INDICES.has(index);
     ctx.fillStyle = isTorsoPoint ? TORSO_COLOR : index < 11 ? FACE_COLOR : '#ffffff';
     ctx.beginPath();
     ctx.arc(point.x, point.y, isTorsoPoint ? 6 : 3.5, 0, Math.PI * 2);

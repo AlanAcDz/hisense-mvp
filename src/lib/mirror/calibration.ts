@@ -52,6 +52,8 @@ export interface CalibrationPreviewOverlay {
   rightHip: Point2D
   leftElbow: Point2D
   rightElbow: Point2D
+  leftWrist: Point2D
+  rightWrist: Point2D
 }
 
 export interface CalibrationPreviewScene {
@@ -184,14 +186,19 @@ function buildVisibleOverlay(stageSize: StageSize, pose: CalibrationPreviewPose)
     roll,
   )
 
+  const leftElbow = pointAlongAngle(leftShoulder, pose.leftArmAngleDeg, armLengthPx)
+  const rightElbow = pointAlongAngle(rightShoulder, pose.rightArmAngleDeg, armLengthPx)
+
   return {
     torsoPolygon: [leftShoulder, rightShoulder, rightHip, leftHip],
     leftShoulder,
     rightShoulder,
     leftHip,
     rightHip,
-    leftElbow: pointAlongAngle(leftShoulder, pose.leftArmAngleDeg, armLengthPx),
-    rightElbow: pointAlongAngle(rightShoulder, pose.rightArmAngleDeg, armLengthPx),
+    leftElbow,
+    rightElbow,
+    leftWrist: pointAlongAngle(leftElbow, pose.leftArmAngleDeg, armLengthPx * 0.72),
+    rightWrist: pointAlongAngle(rightElbow, pose.rightArmAngleDeg, armLengthPx * 0.72),
   }
 }
 
@@ -204,6 +211,8 @@ function mirrorOverlay(overlay: CalibrationPreviewOverlay, stageWidth: number): 
     rightHip: mirrorPoint(overlay.rightHip, stageWidth),
     leftElbow: mirrorPoint(overlay.leftElbow, stageWidth),
     rightElbow: mirrorPoint(overlay.rightElbow, stageWidth),
+    leftWrist: mirrorPoint(overlay.leftWrist, stageWidth),
+    rightWrist: mirrorPoint(overlay.rightWrist, stageWidth),
   }
 }
 
@@ -235,11 +244,25 @@ function buildPreviewPoseFrame(
     overlay.rightElbow,
     stageSize,
   )
+  const leftWristWorld = buildWorldArmPoint(
+    leftElbowWorld,
+    overlay.leftElbow,
+    overlay.leftWrist,
+    stageSize,
+  )
+  const rightWristWorld = buildWorldArmPoint(
+    rightElbowWorld,
+    overlay.rightElbow,
+    overlay.rightWrist,
+    stageSize,
+  )
 
   normalizedLandmarks[LANDMARK_INDICES.leftShoulder] = buildNormalizedLandmark(overlay.leftShoulder, stageSize)
   normalizedLandmarks[LANDMARK_INDICES.rightShoulder] = buildNormalizedLandmark(overlay.rightShoulder, stageSize)
   normalizedLandmarks[LANDMARK_INDICES.leftElbow] = buildNormalizedLandmark(overlay.leftElbow, stageSize)
   normalizedLandmarks[LANDMARK_INDICES.rightElbow] = buildNormalizedLandmark(overlay.rightElbow, stageSize)
+  normalizedLandmarks[LANDMARK_INDICES.leftWrist] = buildNormalizedLandmark(overlay.leftWrist, stageSize)
+  normalizedLandmarks[LANDMARK_INDICES.rightWrist] = buildNormalizedLandmark(overlay.rightWrist, stageSize)
   normalizedLandmarks[LANDMARK_INDICES.leftHip] = buildNormalizedLandmark(overlay.leftHip, stageSize)
   normalizedLandmarks[LANDMARK_INDICES.rightHip] = buildNormalizedLandmark(overlay.rightHip, stageSize)
 
@@ -249,6 +272,8 @@ function buildPreviewPoseFrame(
   worldLandmarks[LANDMARK_INDICES.rightHip] = torsoWorld.rightHipWorld
   worldLandmarks[LANDMARK_INDICES.leftElbow] = leftElbowWorld
   worldLandmarks[LANDMARK_INDICES.rightElbow] = rightElbowWorld
+  worldLandmarks[LANDMARK_INDICES.leftWrist] = leftWristWorld
+  worldLandmarks[LANDMARK_INDICES.rightWrist] = rightWristWorld
 
   return {
     normalizedLandmarks,
@@ -268,15 +293,19 @@ function buildPreviewPoseFrame(
     leftArm: {
       shoulder: normalizedLandmarks[LANDMARK_INDICES.leftShoulder],
       elbow: normalizedLandmarks[LANDMARK_INDICES.leftElbow],
+      wrist: normalizedLandmarks[LANDMARK_INDICES.leftWrist],
       shoulderWorld: torsoWorld.leftShoulderWorld,
       elbowWorld: leftElbowWorld,
+      wristWorld: leftWristWorld,
       minimumVisibility: 1,
     },
     rightArm: {
       shoulder: normalizedLandmarks[LANDMARK_INDICES.rightShoulder],
       elbow: normalizedLandmarks[LANDMARK_INDICES.rightElbow],
+      wrist: normalizedLandmarks[LANDMARK_INDICES.rightWrist],
       shoulderWorld: torsoWorld.rightShoulderWorld,
       elbowWorld: rightElbowWorld,
+      wristWorld: rightWristWorld,
       minimumVisibility: 1,
     },
   }

@@ -29,8 +29,10 @@ export interface TorsoLandmarks {
 export interface ArmLandmarks {
   shoulder: PoseLandmark2D;
   elbow: PoseLandmark2D;
+  wrist?: PoseLandmark2D;
   shoulderWorld: PoseLandmark3D;
   elbowWorld: PoseLandmark3D;
+  wristWorld?: PoseLandmark3D;
   minimumVisibility: number;
 }
 
@@ -93,6 +95,7 @@ export interface TorsoTransform {
 export interface RigPose {
   leftArmZRotation: number | null;
   rightArmZRotation: number | null;
+  torsoRoll: number;
 }
 
 export type BackgroundMode = 'loading' | 'active' | 'paused';
