@@ -28,12 +28,26 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         navigateFallback: 'index.html',
         maximumFileSizeToCacheInBytes: 35 * 1024 * 1024,
-        globPatterns: ['**/*.{html,js,css,png,jpg,jpeg,svg,ico,webmanifest,woff2,glb,mp4,wasm,task}'],
+        globPatterns: ['**/*.{html,js,css,png,jpg,jpeg,svg,ico,webmanifest,woff2,glb,wasm,task}'],
         globIgnores: [
           '**/.DS_Store',
           '**/README.md',
           '**/jersey_mexico_rig.glb',
           '**/hisense-football-stadium-2026.jpg',
+        ],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) =>
+              url.pathname.includes('/assets/backgrounds/') && url.pathname.endsWith('.mp4'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'background-videos',
+              expiration: {
+                maxEntries: 3,
+                maxAgeSeconds: 30 * 24 * 60 * 60,
+              },
+            },
+          },
         ],
       },
     }),
