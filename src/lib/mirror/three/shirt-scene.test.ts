@@ -78,7 +78,7 @@ describe('ShirtSceneController', () => {
     const controller = new ShirtSceneController();
     const loadResult = await controller.loadShirtModel();
 
-    expect(loadResult.usedFallback).toBe(false);
+    expect(loadResult).toEqual({ errorMessage: null, usedFallback: false });
     expect((controller as any).leftArmControl).toBeTruthy();
     expect((controller as any).rightArmControl).toBeTruthy();
     expect((controller as any).leftArmControl.bone.name).toBe('right_shouler');

@@ -44,6 +44,36 @@ function getStableScreenAngle(a: Point2D, b: Point2D) {
   return Math.atan2(end.y - start.y, end.x - start.x);
 }
 
+function getOrientedBounds(points: Point2D[], angle: number) {
+  const xAxis = {
+    x: Math.cos(angle),
+    y: Math.sin(angle),
+  };
+  const yAxis = {
+    x: -Math.sin(angle),
+    y: Math.cos(angle),
+  };
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  points.forEach((point) => {
+    const localX = point.x * xAxis.x + point.y * xAxis.y;
+    const localY = point.x * yAxis.x + point.y * yAxis.y;
+
+    minX = Math.min(minX, localX);
+    maxX = Math.max(maxX, localX);
+    minY = Math.min(minY, localY);
+    maxY = Math.max(maxY, localY);
+  });
+
+  return {
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
 function normalizeAngle(angle: number) {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
@@ -223,12 +253,15 @@ export function computeTorsoTransform(
   const rightHipStage = mapNormalizedToStagePoint(rightHip, stageSize, coverLayout);
   const centerStage = mapNormalizedToStagePoint({ ...center, z: 0 }, stageSize, coverLayout);
 
-  const widthPx = distance2D(leftShoulderStage, rightShoulderStage);
-  const heightPx = distance2D(shoulderStage, hipStage);
-
   const shoulderAngle = getStableScreenAngle(leftShoulderStage, rightShoulderStage);
   const hipAngle = getStableScreenAngle(leftHipStage, rightHipStage);
-  const roll = (shoulderAngle + hipAngle) / 2;
+  const roll = blendAngles(shoulderAngle, hipAngle, 0.5);
+  const torsoBounds = getOrientedBounds(
+    [leftShoulderStage, rightShoulderStage, rightHipStage, leftHipStage],
+    roll
+  );
+  const widthPx = torsoBounds.width;
+  const heightPx = torsoBounds.height;
 
   const shoulderDx = rightShoulderWorld.x - leftShoulderWorld.x;
   const shoulderDz = rightShoulderWorld.z - leftShoulderWorld.z;
@@ -270,31 +303,14 @@ function computeArmZRotation(
 
   const shoulderStage = mapNormalizedToStagePoint(arm.shoulder, stageSize, coverLayout);
   const elbowStage = mapNormalizedToStagePoint(arm.elbow, stageSize, coverLayout);
-  const elbowAngle = Math.atan2(
+  if (distance2D(shoulderStage, elbowStage) < 1) {
+    return null;
+  }
+
+  return Math.atan2(
     shoulderStage.y - elbowStage.y,
     shoulderStage.x - elbowStage.x
   );
-
-  if (!arm.wrist || visibilityOf(arm.wrist) < TORSO_VISIBILITY_THRESHOLD) {
-    return elbowAngle;
-  }
-
-  const wristStage = mapNormalizedToStagePoint(arm.wrist, stageSize, coverLayout);
-  const wristAngle = Math.atan2(
-    shoulderStage.y - wristStage.y,
-    shoulderStage.x - wristStage.x
-  );
-  const shoulderToElbow = distance2D(shoulderStage, elbowStage);
-  const shoulderToWrist = distance2D(shoulderStage, wristStage);
-  if (shoulderToElbow < 1 || shoulderToWrist < shoulderToElbow * 0.75) {
-    return elbowAngle;
-  }
-
-  const overheadInfluence = clamp01((shoulderStage.y - wristStage.y) / Math.max(shoulderToElbow, 1));
-  const bendInfluence = clamp01(Math.abs(normalizeAngle(wristAngle - elbowAngle)) / (Math.PI / 2));
-  const wristWeight = Math.min(0.35, overheadInfluence * 0.22 + bendInfluence * 0.12);
-
-  return blendAngles(elbowAngle, wristAngle, wristWeight);
 }
 
 export function computeRigPose(

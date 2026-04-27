@@ -72,6 +72,23 @@ describe('torso transform', () => {
     expect(transform?.depth).toBeGreaterThan(0);
   });
 
+  it('uses the full shoulder and hip bounds for dynamic torso scale', () => {
+    const normalizedLandmarks = buildNormalizedLandmarks();
+    normalizedLandmarks[11] = { x: 0.46, y: 0.32, z: 0, visibility: 0.98 };
+    normalizedLandmarks[12] = { x: 0.54, y: 0.32, z: 0, visibility: 0.98 };
+    normalizedLandmarks[23] = { x: 0.28, y: 0.73, z: 0, visibility: 0.98 };
+    normalizedLandmarks[24] = { x: 0.72, y: 0.73, z: 0, visibility: 0.98 };
+
+    const poseFrame = createPoseFrame(normalizedLandmarks, buildWorldLandmarks(), 1000);
+    const stageSize = { width: 1280, height: 720 };
+    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
+    const transform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
+
+    expect(transform).not.toBeNull();
+    expect(transform?.widthPx).toBeCloseTo(563.2, 4);
+    expect(transform?.heightPx).toBeCloseTo(295.2, 4);
+  });
+
   it('hides the shirt transform when required torso visibility is too low', () => {
     const normalizedLandmarks = buildNormalizedLandmarks();
     normalizedLandmarks[24] = { ...normalizedLandmarks[24], visibility: 0.1 };
@@ -116,16 +133,16 @@ describe('rig pose', () => {
     expect(rigPose?.torsoRoll).toBeCloseTo(0, 4);
   });
 
-  it('leans sleeve rotation toward the wrist when the arm is overhead', () => {
+  it('keeps sleeve rotation centered on the shoulder-elbow line when the wrist bends', () => {
     const normalizedLandmarks = buildNormalizedLandmarks();
     normalizedLandmarks[11] = { x: 0.4, y: 0.4, z: 0, visibility: 0.98 };
     normalizedLandmarks[13] = { x: 0.34, y: 0.22, z: 0, visibility: 0.98 };
     normalizedLandmarks[15] = { x: 0.47, y: 0.08, z: 0, visibility: 0.98 };
 
-    const withoutWrist = buildNormalizedLandmarks();
-    withoutWrist[11] = normalizedLandmarks[11];
-    withoutWrist[13] = normalizedLandmarks[13];
-    withoutWrist[15] = { x: 0.47, y: 0.08, z: 0, visibility: 0.1 };
+    const bentWrist = buildNormalizedLandmarks();
+    bentWrist[11] = normalizedLandmarks[11];
+    bentWrist[13] = normalizedLandmarks[13];
+    bentWrist[15] = { x: 0.22, y: 0.08, z: 0, visibility: 0.98 };
 
     const worldLandmarks = buildWorldLandmarks();
     const stageSize = { width: 1280, height: 720 };
@@ -135,22 +152,22 @@ describe('rig pose', () => {
       stageSize,
       coverLayout
     );
-    const wristAwarePose = computeRigPose(
+    const straightWristPose = computeRigPose(
       createPoseFrame(normalizedLandmarks, worldLandmarks, 1000),
       torsoTransform,
       stageSize,
       coverLayout
     );
-    const elbowOnlyPose = computeRigPose(
-      createPoseFrame(withoutWrist, worldLandmarks, 1000),
+    const bentWristPose = computeRigPose(
+      createPoseFrame(bentWrist, worldLandmarks, 1000),
       torsoTransform,
       stageSize,
       coverLayout
     );
 
-    expect(wristAwarePose?.leftArmZRotation).not.toBeNull();
-    expect(elbowOnlyPose?.leftArmZRotation).not.toBeNull();
-    expect(Math.abs(wristAwarePose!.leftArmZRotation! - elbowOnlyPose!.leftArmZRotation!)).toBeGreaterThan(0.1);
+    expect(straightWristPose?.leftArmZRotation).not.toBeNull();
+    expect(bentWristPose?.leftArmZRotation).not.toBeNull();
+    expect(bentWristPose!.leftArmZRotation!).toBeCloseTo(straightWristPose!.leftArmZRotation!, 6);
   });
 
   it('returns null arm rotations when the arm landmarks are not visible', () => {
