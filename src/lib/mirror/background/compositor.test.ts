@@ -1,4 +1,5 @@
 import {
+  applyJointBilateralFilter,
   copySegmentationAlpha,
   createBackgroundMatte,
   dilateAlphaMask,
@@ -45,6 +46,34 @@ describe('background compositor', () => {
     expect(alpha[0]).toBe(0);
     expect(alpha[1]).toBeGreaterThan(64);
     expect(alpha[2]).toBe(0);
+  });
+
+  it('uses guide colors to keep refined mask edges aligned to image edges', () => {
+    const alpha = new Float32Array([0, 0.5, 1]);
+    const guideRgba = new Uint8ClampedArray([
+      20, 20, 20, 255,
+      20, 20, 20, 255,
+      240, 240, 240, 255,
+    ]);
+
+    const filtered = applyJointBilateralFilter(alpha, 3, 1, guideRgba, {
+      edgeThreshold: 0.01,
+      radius: 1,
+      sigmaColor: 16,
+      sigmaSpatial: 1,
+    });
+
+    expect(filtered[1]).toBeLessThan(0.35);
+    expect(filtered[1]).toBeGreaterThan(0);
+  });
+
+  it('leaves the segmentation confidence unchanged without matching guide pixels', () => {
+    const alpha = new Float32Array([0, 0.5, 1]);
+
+    const filtered = applyJointBilateralFilter(alpha, 3, 1, undefined);
+
+    expect(Array.from(filtered)).toEqual([0, 0.5, 1]);
+    expect(filtered).not.toBe(alpha);
   });
 
   it('keeps the matte soft without expanding it too far past the subject', () => {

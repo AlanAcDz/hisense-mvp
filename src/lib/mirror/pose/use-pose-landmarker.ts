@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import {
+  BACKGROUND_MASK_JOINT_BILATERAL_ENABLED,
   DETECTION_INPUT_LONG_EDGE_PX,
   DETECTION_INTERVAL_MS,
   MEDIAPIPE_WASM_URL,
@@ -126,17 +127,24 @@ function mapWorldLandmarks(landmarks: PoseLandmark3D[] | undefined) {
 
 function copySegmentationFrame(
   segmentationMasks: { width: number; height: number; getAsFloat32Array(): Float32Array }[] | undefined,
-  timestamp: number
+  timestamp: number,
+  guideRgba?: Uint8ClampedArray
 ): SegmentationFrame | null {
   const firstMask = segmentationMasks?.[0];
   if (!firstMask) {
     return null;
   }
 
+  const validGuideRgba =
+    guideRgba?.length === firstMask.width * firstMask.height * 4
+      ? guideRgba
+      : undefined;
+
   return {
     width: firstMask.width,
     height: firstMask.height,
     alpha: Float32Array.from(firstMask.getAsFloat32Array()),
+    ...(validGuideRgba ? { guideRgba: validGuideRgba } : {}),
     timestamp,
   };
 }
@@ -249,12 +257,14 @@ export function usePoseLandmarker() {
 
       try {
         const detectionScale = getDetectionScale(videoElement.videoWidth, videoElement.videoHeight);
+        const detectionWidth = Math.max(1, Math.round(videoElement.videoWidth * detectionScale));
+        const detectionHeight = Math.max(1, Math.round(videoElement.videoHeight * detectionScale));
+        const shouldUseDetectionCanvas =
+          detectionScale < 1 || BACKGROUND_MASK_JOINT_BILATERAL_ENABLED;
         let detectionSource: CanvasImageSource = videoElement;
+        let guideRgba: Uint8ClampedArray | undefined;
 
-        if (detectionScale < 1) {
-          const detectionWidth = Math.max(1, Math.round(videoElement.videoWidth * detectionScale));
-          const detectionHeight = Math.max(1, Math.round(videoElement.videoHeight * detectionScale));
-
+        if (shouldUseDetectionCanvas) {
           if (!detectionCanvasRef.current) {
             detectionCanvasRef.current = document.createElement('canvas');
           }
@@ -269,7 +279,11 @@ export function usePoseLandmarker() {
           let detectionContext = detectionCanvasContextRef.current;
           if (!detectionContext) {
             detectionContext =
-              detectionCanvas.getContext('2d', { alpha: false, desynchronized: true }) ??
+              detectionCanvas.getContext('2d', {
+                alpha: false,
+                desynchronized: true,
+                willReadFrequently: BACKGROUND_MASK_JOINT_BILATERAL_ENABLED,
+              }) ??
               detectionCanvas.getContext('2d');
             detectionCanvasContextRef.current = detectionContext;
           }
@@ -277,6 +291,14 @@ export function usePoseLandmarker() {
           if (detectionContext) {
             detectionContext.drawImage(videoElement, 0, 0, detectionWidth, detectionHeight);
             detectionSource = detectionCanvas;
+
+            if (BACKGROUND_MASK_JOINT_BILATERAL_ENABLED) {
+              try {
+                guideRgba = detectionContext.getImageData(0, 0, detectionWidth, detectionHeight).data;
+              } catch {
+                guideRgba = undefined;
+              }
+            }
           }
         }
 
@@ -287,7 +309,8 @@ export function usePoseLandmarker() {
             result.segmentationMasks as
               | { width: number; height: number; getAsFloat32Array(): Float32Array }[]
               | undefined,
-            now
+            now,
+            guideRgba
           );
           const hasPoseLandmarks = Boolean(result.landmarks[0]?.length);
 

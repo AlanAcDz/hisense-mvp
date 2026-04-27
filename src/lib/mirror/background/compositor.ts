@@ -3,6 +3,11 @@ import {
   BACKGROUND_MASK_DILATION_RADIUS,
   BACKGROUND_MASK_DRAW_BLUR_PX,
   BACKGROUND_MASK_FEATHER_PASSES,
+  BACKGROUND_MASK_JOINT_BILATERAL_EDGE_THRESHOLD,
+  BACKGROUND_MASK_JOINT_BILATERAL_ENABLED,
+  BACKGROUND_MASK_JOINT_BILATERAL_RADIUS,
+  BACKGROUND_MASK_JOINT_BILATERAL_SIGMA_COLOR,
+  BACKGROUND_MASK_JOINT_BILATERAL_SIGMA_SPATIAL,
   BACKGROUND_MASK_MIN_COVERAGE,
   BACKGROUND_MASK_STAY_THRESHOLD,
   BACKGROUND_MASK_STALE_MS,
@@ -32,8 +37,62 @@ interface DrawForegroundLayerOptions {
   mirror?: boolean;
 }
 
+interface JointBilateralFilterOptions {
+  edgeThreshold?: number;
+  radius?: number;
+  sigmaColor?: number;
+  sigmaSpatial?: number;
+}
+
+const colorWeightCache = new Map<number, Float32Array>();
+
 function clamp01(value: number) {
   return Math.max(0, Math.min(1, value));
+}
+
+function getColorWeightLookup(sigmaColor: number) {
+  const cacheKey = Math.round(sigmaColor * 1000);
+  const cached = colorWeightCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const maxColorDistanceSquared = 255 * 255 * 3;
+  const colorWeights = new Float32Array(maxColorDistanceSquared + 1);
+  const colorDenominator = 2 * sigmaColor * sigmaColor;
+  for (let distanceSquared = 0; distanceSquared <= maxColorDistanceSquared; distanceSquared += 1) {
+    colorWeights[distanceSquared] = Math.exp(-distanceSquared / colorDenominator);
+  }
+
+  colorWeightCache.set(cacheKey, colorWeights);
+  return colorWeights;
+}
+
+function isLikelyMatteEdge(
+  alpha: Float32Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  edgeThreshold: number
+) {
+  const index = y * width + x;
+  const centerAlpha = alpha[index] ?? 0;
+  if (centerAlpha > edgeThreshold && centerAlpha < 1 - edgeThreshold) {
+    return true;
+  }
+
+  const left = x > 0 ? alpha[index - 1] ?? centerAlpha : centerAlpha;
+  const right = x < width - 1 ? alpha[index + 1] ?? centerAlpha : centerAlpha;
+  const top = y > 0 ? alpha[index - width] ?? centerAlpha : centerAlpha;
+  const bottom = y < height - 1 ? alpha[index + width] ?? centerAlpha : centerAlpha;
+
+  return (
+    Math.abs(centerAlpha - left) > edgeThreshold ||
+    Math.abs(centerAlpha - right) > edgeThreshold ||
+    Math.abs(centerAlpha - top) > edgeThreshold ||
+    Math.abs(centerAlpha - bottom) > edgeThreshold
+  );
 }
 
 function getCoverLayoutForSource(
@@ -167,6 +226,93 @@ export function copySegmentationAlpha(
   return alpha;
 }
 
+export function applyJointBilateralFilter(
+  alpha: Float32Array,
+  width: number,
+  height: number,
+  guideRgba: Uint8ClampedArray | undefined,
+  {
+    edgeThreshold = BACKGROUND_MASK_JOINT_BILATERAL_EDGE_THRESHOLD,
+    radius = BACKGROUND_MASK_JOINT_BILATERAL_RADIUS,
+    sigmaColor = BACKGROUND_MASK_JOINT_BILATERAL_SIGMA_COLOR,
+    sigmaSpatial = BACKGROUND_MASK_JOINT_BILATERAL_SIGMA_SPATIAL,
+  }: JointBilateralFilterOptions = {}
+) {
+  const filterRadius = Math.floor(radius);
+  if (
+    filterRadius <= 0 ||
+    !guideRgba ||
+    guideRgba.length !== width * height * 4 ||
+    alpha.length !== width * height
+  ) {
+    return new Float32Array(alpha);
+  }
+
+  const refined = new Float32Array(alpha.length);
+  const colorWeights = getColorWeightLookup(sigmaColor);
+  const offsets: Array<{ dx: number; dy: number; spatialWeight: number }> = [];
+  const spatialDenominator = 2 * sigmaSpatial * sigmaSpatial;
+
+  for (let dy = -filterRadius; dy <= filterRadius; dy += 1) {
+    for (let dx = -filterRadius; dx <= filterRadius; dx += 1) {
+      if (dx * dx + dy * dy > filterRadius * filterRadius) {
+        continue;
+      }
+
+      offsets.push({
+        dx,
+        dy,
+        spatialWeight: Math.exp(-(dx * dx + dy * dy) / spatialDenominator),
+      });
+    }
+  }
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      const centerAlpha = alpha[index] ?? 0;
+
+      if (!isLikelyMatteEdge(alpha, width, height, x, y, edgeThreshold)) {
+        refined[index] = centerAlpha;
+        continue;
+      }
+
+      const centerRgbaOffset = index * 4;
+      const centerRed = guideRgba[centerRgbaOffset] ?? 0;
+      const centerGreen = guideRgba[centerRgbaOffset + 1] ?? 0;
+      const centerBlue = guideRgba[centerRgbaOffset + 2] ?? 0;
+      let weightedAlpha = 0;
+      let totalWeight = 0;
+
+      for (const { dx, dy, spatialWeight } of offsets) {
+        const sampleX = x + dx;
+        const sampleY = y + dy;
+        if (sampleX < 0 || sampleX >= width || sampleY < 0 || sampleY >= height) {
+          continue;
+        }
+
+        const sampleIndex = sampleY * width + sampleX;
+        const sampleRgbaOffset = sampleIndex * 4;
+        const redDistance = centerRed - (guideRgba[sampleRgbaOffset] ?? 0);
+        const greenDistance = centerGreen - (guideRgba[sampleRgbaOffset + 1] ?? 0);
+        const blueDistance = centerBlue - (guideRgba[sampleRgbaOffset + 2] ?? 0);
+        const colorDistanceSquared =
+          redDistance * redDistance +
+          greenDistance * greenDistance +
+          blueDistance * blueDistance;
+        const weight = spatialWeight * (colorWeights[colorDistanceSquared] ?? 0);
+
+        weightedAlpha += (alpha[sampleIndex] ?? 0) * weight;
+        totalWeight += weight;
+      }
+
+      refined[index] = totalWeight > 0 ? weightedAlpha / totalWeight : centerAlpha;
+    }
+  }
+
+  return refined;
+}
+
 export function dilateAlphaMask(
   alpha: Uint8ClampedArray,
   width: number,
@@ -282,11 +428,24 @@ export function createBackgroundMatte(
   segmentationFrame: SegmentationFrame,
   previousMatte?: BackgroundMatte | null
 ): BackgroundMatte {
+  const segmentationAlpha =
+    BACKGROUND_MASK_JOINT_BILATERAL_ENABLED
+      ? applyJointBilateralFilter(
+          segmentationFrame.alpha,
+          segmentationFrame.width,
+          segmentationFrame.height,
+          segmentationFrame.guideRgba
+        )
+      : segmentationFrame.alpha;
+  const refinedSegmentationFrame = {
+    ...segmentationFrame,
+    alpha: segmentationAlpha,
+  };
   const previousAlpha =
     previousMatte?.width === segmentationFrame.width && previousMatte.height === segmentationFrame.height
       ? previousMatte.alpha
       : null;
-  const copiedAlpha = copySegmentationAlpha(segmentationFrame, undefined, undefined, previousAlpha);
+  const copiedAlpha = copySegmentationAlpha(refinedSegmentationFrame, undefined, undefined, previousAlpha);
   const dilatedAlpha = dilateAlphaMask(
     copiedAlpha,
     segmentationFrame.width,

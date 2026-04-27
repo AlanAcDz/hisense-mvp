@@ -49,6 +49,7 @@ export interface SegmentationFrame {
   width: number;
   height: number;
   alpha: Float32Array;
+  guideRgba?: Uint8ClampedArray;
   timestamp: number;
 }
 
