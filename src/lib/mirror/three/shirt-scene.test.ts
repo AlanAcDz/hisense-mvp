@@ -10,6 +10,7 @@ import {
   Skeleton,
   SkinnedMesh,
   Uint16BufferAttribute,
+  Vector3,
 } from 'three';
 import { SHIRT_CALIBRATION } from '@/lib/mirror/constants';
 
@@ -127,6 +128,56 @@ describe('ShirtSceneController', () => {
 
     expect(leftBone.quaternion.angleTo(leftBind)).toBeGreaterThan(0.1);
     expect(rightBone.quaternion.angleTo(rightBind)).toBeGreaterThan(0.1);
+  });
+
+  it('keeps the sleeve bone aligned to the requested screen angle under non-uniform torso scale', async () => {
+    loaderLoadAsync.mockResolvedValueOnce({ scene: createRiggedScene() });
+
+    const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
+    const controller = new ShirtSceneController(SHIRT_CALIBRATION, {
+      leftArmZRotationOffset: 0,
+      rightArmZRotationOffset: 0,
+    });
+    await controller.loadShirtModel();
+
+    const anchor = (controller as any).shirtAnchor as Group;
+    const scale = new Vector3(2.4, 1, 1);
+    const roll = 0.35;
+    const targetScreenAngle = 0.12;
+    anchor.scale.copy(scale);
+    anchor.quaternion.setFromEuler(new Euler(0, 0, roll));
+    (controller as any).currentScale.copy(scale);
+    (controller as any).currentRotation.copy(anchor.quaternion);
+
+    for (let index = 0; index < 50; index += 1) {
+      controller.updateRigPose({
+        leftArmZRotation: targetScreenAngle,
+        rightArmZRotation: null,
+        torsoRoll: roll,
+      });
+    }
+
+    const control = (controller as any).leftArmControl as {
+      bone: Bone;
+      childBone: Bone;
+      bindQuaternion: Quaternion;
+      restAngle: number;
+      axisSign: 1 | -1;
+    };
+    const rotationDelta = control.bindQuaternion.clone().invert().multiply(control.bone.quaternion);
+    const localArmAngle =
+      control.restAngle + new Euler().setFromQuaternion(rotationDelta).z * control.axisSign;
+    const scaledDirection = new Vector3(
+      Math.cos(localArmAngle) * scale.x,
+      Math.sin(localArmAngle) * scale.y,
+      0
+    ).applyQuaternion(anchor.quaternion);
+    const screenAngle = Math.atan2(
+      scaledDirection.y,
+      scaledDirection.x
+    );
+
+    expect(screenAngle).toBeCloseTo(targetScreenAngle, 2);
   });
 
   it('falls back to the proxy garment when the rigged asset cannot be loaded', async () => {

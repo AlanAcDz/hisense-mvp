@@ -210,14 +210,22 @@ export class ShirtSceneController {
       this.leftArmControl,
       rigPose?.leftArmZRotation === null || rigPose?.leftArmZRotation === undefined
         ? null
-        : normalizeAngle(rigPose.leftArmZRotation - smoothedTorsoRoll),
+        : compensateAngleForAnchorScale(
+            rigPose.leftArmZRotation,
+            smoothedTorsoRoll,
+            this.currentScale
+          ),
       this.rigCalibration.leftArmZRotationOffset
     );
     this.applyBoneRotation(
       this.rightArmControl,
       rigPose?.rightArmZRotation === null || rigPose?.rightArmZRotation === undefined
         ? null
-        : normalizeAngle(rigPose.rightArmZRotation - smoothedTorsoRoll),
+        : compensateAngleForAnchorScale(
+            rigPose.rightArmZRotation,
+            smoothedTorsoRoll,
+            this.currentScale
+          ),
       this.rigCalibration.rightArmZRotationOffset
     );
   }
@@ -400,6 +408,21 @@ function sameEuler(
 
 function normalizeAngle(angle: number) {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
+function compensateAngleForAnchorScale(
+  screenAngle: number,
+  anchorRoll: number,
+  anchorScale: Vector3
+) {
+  const relativeAngle = normalizeAngle(screenAngle - anchorRoll);
+  const scaleX = Math.max(Math.abs(anchorScale.x), 1e-6);
+  const scaleY = Math.max(Math.abs(anchorScale.y), 1e-6);
+
+  return Math.atan2(
+    Math.sin(relativeAngle) / scaleY,
+    Math.cos(relativeAngle) / scaleX
+  );
 }
 
 function validateRiggedModel(root: Object3D) {

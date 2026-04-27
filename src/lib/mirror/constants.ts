@@ -73,7 +73,7 @@ export const RIG_CALIBRATION: RigCalibration = {
   // These offsets compensate for the sleeve meshes being authored at a stable
   // angle relative to the shoulder-arm bone chain in jersey_mexico_rig.glb.
   leftArmZRotationOffset: -0.971592653589793,
-  rightArmZRotationOffset: 0.998407346410207,
+  rightArmZRotationOffset: 0.938407346410207,
 }
 
 export const POSE_CONNECTIONS: Array<[number, number]> = [
