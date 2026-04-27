@@ -1,9 +1,20 @@
 import { forwardRef, useEffect, useImperativeHandle } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MirrorPage } from '@/components/mirror-page';
 import type { MirrorStageHandle, MirrorStageProps } from '@/components/mirror-stage';
+import { SCREENSAVER_VIDEO_ASSET_URL } from '@/lib/mirror/constants';
 
 describe('MirrorPage', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function queryScreensaverVideo() {
+    return document.querySelector<HTMLVideoElement>(
+      `video[src="${SCREENSAVER_VIDEO_ASSET_URL}"]`
+    );
+  }
+
   it('renders the mirror immediately and keeps pose points hidden by default', () => {
     const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(
       { jerseyOpacity, showPosePoints },
@@ -89,5 +100,60 @@ describe('MirrorPage', () => {
     expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-jersey-opacity', '1');
     expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-show-points', 'true');
     expect(captureSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the screensaver after one minute without a detected subject', () => {
+    vi.useFakeTimers();
+    const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(_props, ref) {
+      useImperativeHandle(ref, () => ({
+        capture() {},
+      }));
+
+      return <div data-testid="mirror-stage" />;
+    });
+
+    render(<MirrorPage StageComponent={FakeStage} />);
+
+    expect(queryScreensaverVideo()).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(59_999);
+    });
+    expect(queryScreensaverVideo()).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(queryScreensaverVideo()).toBeInTheDocument();
+  });
+
+  it('hides the screensaver when a subject is detected again', () => {
+    vi.useFakeTimers();
+    let subjectDetected = false;
+    const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(
+      { onSubjectDetectedChange },
+      ref
+    ) {
+      useImperativeHandle(ref, () => ({
+        capture() {},
+      }));
+      useEffect(() => {
+        onSubjectDetectedChange?.(subjectDetected);
+      });
+
+      return <div data-testid="mirror-stage" />;
+    });
+
+    const { rerender } = render(<MirrorPage StageComponent={FakeStage} />);
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(queryScreensaverVideo()).toBeInTheDocument();
+
+    subjectDetected = true;
+    rerender(<MirrorPage StageComponent={FakeStage} />);
+
+    expect(queryScreensaverVideo()).not.toBeInTheDocument();
   });
 });
