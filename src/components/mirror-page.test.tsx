@@ -82,7 +82,7 @@ describe('MirrorPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /mostrar configuracion/i }));
 
     expect(screen.getByRole('button', { name: /mostrar controles completos/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /calibration lab/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /calibration lab/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /capture/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /show pose points/i })).toBeInTheDocument();
   });
