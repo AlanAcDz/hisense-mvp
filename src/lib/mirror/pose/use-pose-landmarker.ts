@@ -6,8 +6,8 @@ import {
   DETECTION_INTERVAL_MS,
   MEDIAPIPE_WASM_URL,
   POSE_CONFIDENCE,
-  POSE_MODEL_URL,
   POSE_USE_GPU_DELEGATE,
+  getPoseModelUrl,
 } from '@/lib/mirror/constants';
 import { createPoseFrame } from '@/lib/mirror/pose/torso';
 import type {
@@ -49,7 +49,7 @@ async function createPoseLandmarker(delegate: 'CPU' | 'GPU') {
 
   return PoseLandmarker.createFromOptions(vision, {
     baseOptions: {
-      modelAssetPath: POSE_MODEL_URL,
+      modelAssetPath: getPoseModelUrl(),
       ...(delegate === 'GPU' ? { delegate: 'GPU' as const } : {}),
     },
     ...(delegateCanvas ? { canvas: delegateCanvas } : {}),

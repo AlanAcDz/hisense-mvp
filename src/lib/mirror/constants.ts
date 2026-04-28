@@ -30,11 +30,28 @@ export const REQUIRED_TORSO_INDICES = [
 export const TORSO_VISIBILITY_THRESHOLD = 0.5
 export const DETECTION_INTERVAL_MS = 33
 export const DETECTION_INPUT_LONG_EDGE_PX = 1024
-export const POSE_MODEL_VARIANT = 'full'
+export const POSE_MODEL_VARIANTS = ['full', 'lite'] as const
+export type PoseModelVariant = (typeof POSE_MODEL_VARIANTS)[number]
+export const POSE_MODEL_VARIANT: PoseModelVariant = 'full'
 export const POSE_MODEL_URLS = {
   full: withBaseUrl('/assets/mediapipe/models/pose_landmarker_full.task'),
+  lite: withBaseUrl('/assets/mediapipe/models/pose_landmarker_lite.task'),
 } as const
-export const POSE_MODEL_URL = POSE_MODEL_URLS[POSE_MODEL_VARIANT]
+export function isPoseModelVariant(value: string | null): value is PoseModelVariant {
+  return POSE_MODEL_VARIANTS.includes(value as PoseModelVariant)
+}
+export function getPoseModelVariant() {
+  if (typeof window === 'undefined') {
+    return POSE_MODEL_VARIANT
+  }
+
+  const queryVariant = new URLSearchParams(window.location.search).get('poseModel')
+  return isPoseModelVariant(queryVariant) ? queryVariant : POSE_MODEL_VARIANT
+}
+export function getPoseModelUrl(variant = getPoseModelVariant()) {
+  return POSE_MODEL_URLS[variant]
+}
+export const POSE_MODEL_URL = getPoseModelUrl(POSE_MODEL_VARIANT)
 export const POSE_USE_GPU_DELEGATE = true
 export const POSE_CONFIDENCE = {
   minPoseDetectionConfidence: 0.6,
