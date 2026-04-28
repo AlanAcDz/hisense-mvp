@@ -9,6 +9,7 @@ import {
   Group,
   LoadingManager,
   Material,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -30,6 +31,7 @@ import {
 } from '@/lib/mirror/constants';
 import { smoothQuaternion, smoothVector3 } from '@/lib/mirror/pose/smoothing';
 import type {
+  Point2D,
   RigCalibration,
   RigPose,
   ShirtCalibration,
@@ -51,9 +53,27 @@ interface ControlledBone {
   axisSign: 1 | -1;
 }
 
+interface ModelAnchorMetrics {
+  leftShoulder: Vector3;
+  rightShoulder: Vector3;
+  leftHip: Vector3;
+  rightHip: Vector3;
+  leftArm: Vector3 | null;
+  rightArm: Vector3 | null;
+  torsoCenter: Vector3;
+  shoulderWidth: number;
+  torsoHeight: number;
+}
+
 const Z_AXIS = new Vector3(0, 0, 1);
 const LEFT_ARM_ALIASES = ['left_shoulder', 'left_shouler', 'left_upper_arm', 'left_arm'] as const;
 const RIGHT_ARM_ALIASES = ['right_shoulder', 'right_shouler', 'right_upper_arm', 'right_arm'] as const;
+const LEFT_SHOULDER_ANCHOR_ALIASES = ['left_shoulder', 'left_shouler'] as const;
+const RIGHT_SHOULDER_ANCHOR_ALIASES = ['right_shoulder', 'right_shouler'] as const;
+const LEFT_HIP_ANCHOR_ALIASES = ['left_hip'] as const;
+const RIGHT_HIP_ANCHOR_ALIASES = ['right_hip'] as const;
+const LEFT_ARM_ANCHOR_ALIASES = ['left_arm'] as const;
+const RIGHT_ARM_ANCHOR_ALIASES = ['right_arm'] as const;
 
 export class ShirtSceneController {
   private readonly renderer: WebGLRenderer;
@@ -75,6 +95,7 @@ export class ShirtSceneController {
   private calibrationQuaternion = new Quaternion();
   private leftArmControl: ControlledBone | null = null;
   private rightArmControl: ControlledBone | null = null;
+  private modelAnchors: ModelAnchorMetrics | null = null;
 
   constructor(
     calibration: ShirtCalibration = SHIRT_CALIBRATION,
@@ -180,6 +201,7 @@ export class ShirtSceneController {
 
     this.shirtAnchor.visible = true;
 
+    const anchoredTransform = this.computeAnchoredTransform(transform);
     const targetPosition = new Vector3(
       this.stageSize.width / 2 - transform.center.x + transform.widthPx * this.calibration.xOffset,
       this.stageSize.height / 2 - transform.center.y,
@@ -187,19 +209,32 @@ export class ShirtSceneController {
     );
     const scaleXFactor = (transform.widthPx / this.modelSize.x) * this.calibration.scaleX;
     const scaleYFactor = (transform.heightPx / this.modelSize.y) * this.calibration.scaleY;
-    const targetScale = new Vector3(
+    const targetScale = anchoredTransform?.scale ?? new Vector3(
       scaleXFactor,
       scaleYFactor,
       Math.min(scaleXFactor, scaleYFactor) * this.calibration.scaleZ
     );
     const targetRotation = new Quaternion().copy(transform.rotation);
+    const resolvedTargetPosition = anchoredTransform?.position ?? targetPosition;
 
-    this.currentPosition = smoothVector3(this.currentPosition, targetPosition, 0.65);
+    this.currentPosition = smoothVector3(this.currentPosition, resolvedTargetPosition, 0.65);
     this.currentScale = smoothVector3(this.currentScale, targetScale, 0.6);
     this.currentRotation = smoothQuaternion(this.currentRotation, targetRotation, 0.65);
 
-    this.shirtAnchor.position.copy(this.currentPosition);
-    this.shirtAnchor.scale.copy(this.currentScale);
+    const viewScale = getCameraViewScale(this.currentScale);
+    this.camera.zoom = viewScale;
+    this.camera.updateProjectionMatrix();
+
+    this.shirtAnchor.position.set(
+      this.currentPosition.x / viewScale,
+      this.currentPosition.y / viewScale,
+      this.currentPosition.z / viewScale
+    );
+    this.shirtAnchor.scale.set(
+      this.currentScale.x / viewScale,
+      this.currentScale.y / viewScale,
+      this.currentScale.z / viewScale
+    );
     this.shirtAnchor.quaternion.copy(this.currentRotation);
   }
 
@@ -287,9 +322,55 @@ export class ShirtSceneController {
     const rigControls = resolveRigControls(modelRoot);
     this.leftArmControl = rigControls.leftArmControl;
     this.rightArmControl = rigControls.rightArmControl;
+    this.modelAnchors = resolveModelAnchorMetrics(modelRoot, this.shirtAnchor);
 
     this.applyRenderDefaults();
     this.applyJerseyOpacity();
+  }
+
+  private computeAnchoredTransform(transform: TorsoTransform) {
+    if (!this.modelAnchors) {
+      return null;
+    }
+
+    const targetAnchors = transform.anchors;
+    const targetLeftShoulder = screenPointToWorld(targetAnchors.leftShoulder, this.stageSize);
+    const targetRightShoulder = screenPointToWorld(targetAnchors.rightShoulder, this.stageSize);
+    const targetLeftHip = screenPointToWorld(targetAnchors.leftHip, this.stageSize);
+    const targetRightHip = screenPointToWorld(targetAnchors.rightHip, this.stageSize);
+    const targetShoulderCenter = targetLeftShoulder.clone().add(targetRightShoulder).multiplyScalar(0.5);
+    const targetHipCenter = targetLeftHip.clone().add(targetRightHip).multiplyScalar(0.5);
+    const targetTorsoCenter = targetShoulderCenter.clone().add(targetHipCenter).multiplyScalar(0.5);
+    const targetShoulderWidth = targetLeftShoulder.distanceTo(targetRightShoulder);
+    const targetTorsoHeight = targetShoulderCenter.distanceTo(targetHipCenter);
+    const rotation = new Quaternion().copy(transform.rotation);
+
+    if (
+      targetShoulderWidth < 1 ||
+      targetTorsoHeight < 1 ||
+      this.modelAnchors.shoulderWidth < 1e-6 ||
+      this.modelAnchors.torsoHeight < 1e-6
+    ) {
+      return null;
+    }
+
+    const scaleXFactor = (targetShoulderWidth / this.modelAnchors.shoulderWidth) * this.calibration.scaleX;
+    const scaleYFactor = (targetTorsoHeight / this.modelAnchors.torsoHeight) * this.calibration.scaleY;
+    const scaleZFactor = Math.min(Math.abs(scaleXFactor), Math.abs(scaleYFactor)) * this.calibration.scaleZ;
+    const scale = new Vector3(scaleXFactor, scaleYFactor, scaleZFactor);
+    const modelTorsoOffset = this.modelAnchors.torsoCenter
+      .clone()
+      .multiply(scale)
+      .applyQuaternion(rotation);
+
+    targetTorsoCenter.x += transform.widthPx * this.calibration.xOffset;
+    targetTorsoCenter.y -= transform.heightPx * this.calibration.yOffset;
+    targetTorsoCenter.z = this.calibration.zOffset + transform.depth * this.calibration.depthScale;
+
+    return {
+      position: targetTorsoCenter.sub(modelTorsoOffset),
+      scale,
+    };
   }
 
   private applyJerseyOpacity() {
@@ -323,7 +404,6 @@ export class ShirtSceneController {
         const skinnedMesh = node as SkinnedMesh;
         skinnedMesh.frustumCulled = false;
         skinnedMesh.visible = true;
-        skinnedMesh.pose();
       }
 
       if (!isMeshObject(node)) {
@@ -352,14 +432,22 @@ export class ShirtSceneController {
     const modelContainer = new Group();
     modelContainer.add(nextModel);
 
-    const box = new Box3().setFromObject(modelContainer);
-    const center = box.getCenter(new Vector3());
-    nextModel.position.sub(center);
+    const rawAnchors = resolveRawModelAnchors(modelContainer);
+    if (rawAnchors) {
+      nextModel.position.sub(getModelTorsoCenter(rawAnchors));
+    } else {
+      const box = new Box3().setFromObject(modelContainer);
+      const center = box.getCenter(new Vector3());
+      nextModel.position.sub(center);
+    }
+
+    modelContainer.updateWorldMatrix(true, true);
+    modelContainer.quaternion.copy(baseQuaternion);
+    applyAnchorBasisCorrection(modelContainer);
     modelContainer.updateWorldMatrix(true, true);
 
     const adjustedBounds = new Box3().setFromObject(modelContainer);
     const adjustedSize = adjustedBounds.getSize(new Vector3());
-    modelContainer.quaternion.copy(baseQuaternion);
     anchor.add(modelContainer);
 
     return {
@@ -382,6 +470,86 @@ function applyOpacityToMaterial(material: Material, opacity: number) {
 
 function isMeshObject(node: Object3D): node is Mesh | SkinnedMesh {
   return (node as Mesh).isMesh === true || (node as SkinnedMesh).isSkinnedMesh === true;
+}
+
+function applyAnchorBasisCorrection(modelRoot: Object3D) {
+  const anchors = resolveRawModelAnchors(modelRoot);
+  if (!anchors) {
+    return;
+  }
+
+  const shoulderAxis = anchors.rightShoulder.clone().sub(anchors.leftShoulder);
+  const rawTorsoAxis = anchors.rightHip
+    .clone()
+    .add(anchors.leftHip)
+    .multiplyScalar(0.5)
+    .sub(anchors.rightShoulder.clone().add(anchors.leftShoulder).multiplyScalar(0.5));
+
+  if (shoulderAxis.lengthSq() < 1e-6 || rawTorsoAxis.lengthSq() < 1e-6) {
+    return;
+  }
+
+  shoulderAxis.normalize();
+  const torsoAxis = rawTorsoAxis.sub(
+    shoulderAxis.clone().multiplyScalar(rawTorsoAxis.dot(shoulderAxis))
+  );
+  if (torsoAxis.lengthSq() < 1e-6) {
+    return;
+  }
+  torsoAxis.normalize();
+
+  const sourceZ = shoulderAxis.clone().cross(torsoAxis).normalize();
+  if (sourceZ.lengthSq() < 1e-6) {
+    return;
+  }
+
+  const sourceY = sourceZ.clone().cross(shoulderAxis).normalize();
+  const sourceBasis = new Matrix4().makeBasis(shoulderAxis, sourceY, sourceZ);
+  const targetBasis = new Matrix4().makeBasis(
+    new Vector3(-1, 0, 0),
+    new Vector3(0, -1, 0),
+    new Vector3(0, 0, 1)
+  );
+  const correctionMatrix = targetBasis.multiply(sourceBasis.invert());
+  const correction = new Quaternion().setFromRotationMatrix(correctionMatrix);
+  modelRoot.quaternion.premultiply(correction);
+}
+
+function resolveRawModelAnchors(root: Object3D) {
+  root.updateWorldMatrix(true, true);
+  const objectsByName = new Map<string, Object3D>();
+
+  root.traverse((node) => {
+    objectsByName.set(node.name.toLowerCase(), node);
+  });
+
+  const leftShoulder = getObjectLocalPosition(root, findObjectByAliases(objectsByName, LEFT_SHOULDER_ANCHOR_ALIASES));
+  const rightShoulder = getObjectLocalPosition(root, findObjectByAliases(objectsByName, RIGHT_SHOULDER_ANCHOR_ALIASES));
+  const leftHip = getObjectLocalPosition(root, findObjectByAliases(objectsByName, LEFT_HIP_ANCHOR_ALIASES));
+  const rightHip = getObjectLocalPosition(root, findObjectByAliases(objectsByName, RIGHT_HIP_ANCHOR_ALIASES));
+
+  if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) {
+    return null;
+  }
+
+  return {
+    leftShoulder,
+    rightShoulder,
+    leftHip,
+    rightHip,
+  };
+}
+
+function getModelTorsoCenter(anchors: {
+  leftShoulder: Vector3;
+  rightShoulder: Vector3;
+  leftHip: Vector3;
+  rightHip: Vector3;
+}) {
+  const shoulderCenter = anchors.leftShoulder.clone().add(anchors.rightShoulder).multiplyScalar(0.5);
+  const hipCenter = anchors.leftHip.clone().add(anchors.rightHip).multiplyScalar(0.5);
+
+  return shoulderCenter.add(hipCenter).multiplyScalar(0.5);
 }
 
 function cloneShirtCalibration(calibration: ShirtCalibration): ShirtCalibration {
@@ -425,6 +593,10 @@ function compensateAngleForAnchorScale(
   );
 }
 
+function getCameraViewScale(anchorScale: Vector3) {
+  return Math.max(Math.min(Math.abs(anchorScale.x), Math.abs(anchorScale.y)), 1e-6);
+}
+
 function validateRiggedModel(root: Object3D) {
   let hasSkinnedMesh = false;
 
@@ -456,6 +628,77 @@ function resolveRigControls(root: Object3D) {
     leftArmControl: createControlledBone(findBoneByAliases(bonesByName, RIGHT_ARM_ALIASES)),
     rightArmControl: createControlledBone(findBoneByAliases(bonesByName, LEFT_ARM_ALIASES)),
   };
+}
+
+function resolveModelAnchorMetrics(root: Object3D, anchor: Object3D): ModelAnchorMetrics | null {
+  anchor.updateWorldMatrix(true, true);
+  root.updateWorldMatrix(true, true);
+  const objectsByName = new Map<string, Object3D>();
+
+  root.traverse((node) => {
+    objectsByName.set(node.name.toLowerCase(), node);
+  });
+
+  const leftShoulder = getObjectLocalPosition(anchor, findObjectByAliases(objectsByName, LEFT_SHOULDER_ANCHOR_ALIASES));
+  const rightShoulder = getObjectLocalPosition(anchor, findObjectByAliases(objectsByName, RIGHT_SHOULDER_ANCHOR_ALIASES));
+  const leftHip = getObjectLocalPosition(anchor, findObjectByAliases(objectsByName, LEFT_HIP_ANCHOR_ALIASES));
+  const rightHip = getObjectLocalPosition(anchor, findObjectByAliases(objectsByName, RIGHT_HIP_ANCHOR_ALIASES));
+
+  if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) {
+    return null;
+  }
+
+  const shoulderCenter = leftShoulder.clone().add(rightShoulder).multiplyScalar(0.5);
+  const hipCenter = leftHip.clone().add(rightHip).multiplyScalar(0.5);
+  const torsoCenter = shoulderCenter.clone().add(hipCenter).multiplyScalar(0.5);
+  const shoulderWidth = leftShoulder.distanceTo(rightShoulder);
+  const torsoHeight = shoulderCenter.distanceTo(hipCenter);
+
+  if (shoulderWidth < 1e-6 || torsoHeight < 1e-6) {
+    return null;
+  }
+
+  return {
+    leftShoulder,
+    rightShoulder,
+    leftHip,
+    rightHip,
+    leftArm: getObjectLocalPosition(anchor, findObjectByAliases(objectsByName, LEFT_ARM_ANCHOR_ALIASES)),
+    rightArm: getObjectLocalPosition(anchor, findObjectByAliases(objectsByName, RIGHT_ARM_ANCHOR_ALIASES)),
+    torsoCenter,
+    shoulderWidth,
+    torsoHeight,
+  };
+}
+
+function findObjectByAliases(
+  objectsByName: Map<string, Object3D>,
+  aliases: readonly string[]
+) {
+  for (const alias of aliases) {
+    const match = objectsByName.get(alias.toLowerCase());
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+function getObjectLocalPosition(root: Object3D, object: Object3D | null) {
+  if (!object) {
+    return null;
+  }
+
+  return root.worldToLocal(object.getWorldPosition(new Vector3()));
+}
+
+function screenPointToWorld(point: Point2D, stageSize: StageSize) {
+  return new Vector3(
+    stageSize.width / 2 - point.x,
+    stageSize.height / 2 - point.y,
+    0
+  );
 }
 
 function findBoneByAliases(

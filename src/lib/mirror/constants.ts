@@ -65,11 +65,11 @@ export const BACKGROUND_MASK_DRAW_BLUR_PX = 1
 export const BACKGROUND_MASK_MIN_COVERAGE = 0.015
 
 export const SHIRT_CALIBRATION: ShirtCalibration = {
-  scaleX: 1.65,
-  scaleY: 1.25,
+  scaleX: 1,
+  scaleY: 1,
   scaleZ: 2.5,
   xOffset: 0,
-  yOffset: -0.05,
+  yOffset: 0,
   zOffset: 0,
   depthScale: 120,
   baseRotation: {
@@ -80,10 +80,10 @@ export const SHIRT_CALIBRATION: ShirtCalibration = {
 }
 
 export const RIG_CALIBRATION: RigCalibration = {
-  // These offsets compensate for the sleeve meshes being authored at a stable
-  // angle relative to the shoulder-arm bone chain in jersey_mexico_rig.glb.
-  leftArmZRotationOffset: -0.971592653589793,
-  rightArmZRotationOffset: 0.938407346410207,
+  // The sleeve elbow bones are authored as pose anchors, so their bind angles
+  // can be driven directly from the pose shoulder-elbow lines.
+  leftArmZRotationOffset: 0,
+  rightArmZRotationOffset: 0,
 }
 
 export const POSE_CONNECTIONS: Array<[number, number]> = [

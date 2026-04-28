@@ -252,6 +252,14 @@ export function computeTorsoTransform(
   const leftHipStage = mapNormalizedToStagePoint(leftHip, stageSize, coverLayout);
   const rightHipStage = mapNormalizedToStagePoint(rightHip, stageSize, coverLayout);
   const centerStage = mapNormalizedToStagePoint({ ...center, z: 0 }, stageSize, coverLayout);
+  const leftArmStage =
+    poseFrame.leftArm && poseFrame.leftArm.minimumVisibility >= TORSO_VISIBILITY_THRESHOLD
+      ? mapNormalizedToStagePoint(poseFrame.leftArm.elbow, stageSize, coverLayout)
+      : null;
+  const rightArmStage =
+    poseFrame.rightArm && poseFrame.rightArm.minimumVisibility >= TORSO_VISIBILITY_THRESHOLD
+      ? mapNormalizedToStagePoint(poseFrame.rightArm.elbow, stageSize, coverLayout)
+      : null;
 
   const shoulderAngle = getStableScreenAngle(leftShoulderStage, rightShoulderStage);
   const hipAngle = getStableScreenAngle(leftHipStage, rightHipStage);
@@ -278,6 +286,14 @@ export function computeTorsoTransform(
     },
     topCenter: shoulderStage,
     bottomCenter: hipStage,
+    anchors: {
+      leftShoulder: leftShoulderStage,
+      rightShoulder: rightShoulderStage,
+      leftHip: leftHipStage,
+      rightHip: rightHipStage,
+      leftArm: leftArmStage,
+      rightArm: rightArmStage,
+    },
     widthPx,
     heightPx,
     depth:

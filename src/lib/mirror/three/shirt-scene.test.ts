@@ -6,6 +6,7 @@ import {
   Float32BufferAttribute,
   Group,
   MeshBasicMaterial,
+  Object3D,
   Quaternion,
   Skeleton,
   SkinnedMesh,
@@ -86,24 +87,109 @@ describe('ShirtSceneController', () => {
     expect((controller as any).rightArmControl.bone.name).toBe('left_shoulder');
   });
 
-  it('keeps the loaded model root aligned with the default base rotation', async () => {
+  it('normalizes the loaded model root to the named anchor basis', async () => {
     loaderLoadAsync.mockResolvedValueOnce({ scene: createRiggedScene() });
 
     const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
     const controller = new ShirtSceneController();
     await controller.loadShirtModel();
 
-    const modelRoot = (controller as any).modelRoot as Group | null;
-    const expectedRotation = new Quaternion().setFromEuler(
-      new Euler(
-        SHIRT_CALIBRATION.baseRotation.x,
-        SHIRT_CALIBRATION.baseRotation.y,
-        SHIRT_CALIBRATION.baseRotation.z
-      )
-    );
+    const modelAnchors = (controller as any).modelAnchors as {
+      leftShoulder: Vector3;
+      rightShoulder: Vector3;
+      leftHip: Vector3;
+      rightHip: Vector3;
+    } | null;
+    const shoulderCenter = modelAnchors!.leftShoulder
+      .clone()
+      .add(modelAnchors!.rightShoulder)
+      .multiplyScalar(0.5);
+    const hipCenter = modelAnchors!.leftHip
+      .clone()
+      .add(modelAnchors!.rightHip)
+      .multiplyScalar(0.5);
 
-    expect(modelRoot).toBeTruthy();
-    expect(modelRoot?.quaternion.angleTo(expectedRotation)).toBeLessThan(1e-6);
+    expect(modelAnchors).toBeTruthy();
+    expect(modelAnchors!.leftShoulder.y).toBeCloseTo(modelAnchors!.rightShoulder.y, 6);
+    expect(hipCenter.x).toBeCloseTo(shoulderCenter.x, 6);
+    expect(hipCenter.y).toBeLessThan(shoulderCenter.y);
+  });
+
+  it('centers rigged models from named torso anchors instead of mesh bounds', async () => {
+    loaderLoadAsync.mockResolvedValueOnce({
+      scene: createRiggedScene({ geometryOffsetY: -1000 }),
+    });
+
+    const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
+    const controller = new ShirtSceneController();
+    await controller.loadShirtModel();
+
+    const modelAnchors = (controller as any).modelAnchors as {
+      torsoCenter: Vector3;
+    } | null;
+
+    expect(modelAnchors).toBeTruthy();
+    expect(modelAnchors!.torsoCenter.length()).toBeLessThan(1e-6);
+  });
+
+  it('fits named model anchors to the detected torso points', async () => {
+    loaderLoadAsync.mockResolvedValueOnce({ scene: createRiggedScene() });
+
+    const { ShirtSceneController } = await import('@/lib/mirror/three/shirt-scene');
+    const controller = new ShirtSceneController({
+      ...SHIRT_CALIBRATION,
+      scaleX: 1,
+      scaleY: 1,
+      scaleZ: 1,
+      xOffset: 0,
+      yOffset: 0,
+      zOffset: 0,
+      depthScale: 0,
+      baseRotation: { x: 0, y: 0, z: 0 },
+    });
+    await controller.loadShirtModel();
+    controller.resize({ width: 1000, height: 800 });
+
+    const transform = {
+      center: { x: 580, y: 420 },
+      topCenter: { x: 580, y: 220 },
+      bottomCenter: { x: 580, y: 620 },
+      anchors: {
+        leftShoulder: { x: 400, y: 220 },
+        rightShoulder: { x: 760, y: 220 },
+        leftHip: { x: 436, y: 620 },
+        rightHip: { x: 724, y: 620 },
+        leftArm: { x: 260, y: 340 },
+        rightArm: { x: 900, y: 340 },
+      },
+      widthPx: 360,
+      heightPx: 400,
+      depth: 0,
+      rotation: new Quaternion(),
+    };
+
+    for (let index = 0; index < 30; index += 1) {
+      controller.updateShirtTransform(transform);
+    }
+    (controller as any).shirtAnchor.updateWorldMatrix(true, true);
+
+    const anchor = (controller as any).shirtAnchor as Group;
+    const cameraZoom = (controller as any).camera.zoom as number;
+    const modelAnchors = (controller as any).modelAnchors as {
+      leftShoulder: Vector3;
+      rightShoulder: Vector3;
+      leftHip: Vector3;
+      rightHip: Vector3;
+      leftArm: Vector3 | null;
+      rightArm: Vector3 | null;
+    };
+
+    expect(modelAnchors.leftArm).toBeTruthy();
+    expect(modelAnchors.rightArm).toBeTruthy();
+    expect(projectAnchorPoint(anchor, modelAnchors.leftShoulder, cameraZoom).distanceTo(screenToWorld(transform.anchors.leftShoulder))).toBeLessThan(1);
+    expect(projectAnchorPoint(anchor, modelAnchors.rightShoulder, cameraZoom).distanceTo(screenToWorld(transform.anchors.rightShoulder))).toBeLessThan(1);
+    expect(projectAnchorPoint(anchor, modelAnchors.leftHip, cameraZoom).distanceTo(screenToWorld(transform.anchors.leftHip))).toBeLessThan(16);
+    expect(projectAnchorPoint(anchor, modelAnchors.rightHip, cameraZoom).distanceTo(screenToWorld(transform.anchors.rightHip))).toBeLessThan(16);
   });
 
   it('drives the arm bones from the rig pose instead of detached sleeve anchors', async () => {
@@ -192,7 +278,7 @@ describe('ShirtSceneController', () => {
   });
 });
 
-function createRiggedScene() {
+function createRiggedScene({ geometryOffsetY = 0 } = {}) {
   const root = new Bone();
   root.name = 'root';
 
@@ -231,6 +317,16 @@ function createRiggedScene() {
   rightArm.position.set(3, -1, 0);
   rightShoulder.add(rightArm);
 
+  const leftHip = new Bone();
+  leftHip.name = 'left_hip';
+  leftHip.position.set(-1.6, 4.4, 0);
+  root.add(leftHip);
+
+  const rightHip = new Bone();
+  rightHip.name = 'right_hip';
+  rightHip.position.set(1.6, 4.4, 0);
+  root.add(rightHip);
+
   const skeleton = new Skeleton([
     root,
     chest,
@@ -240,8 +336,13 @@ function createRiggedScene() {
     rightJoint,
     rightShoulder,
     rightArm,
+    leftHip,
+    rightHip,
   ]);
   const geometry = new BoxGeometry(10, 10, 10);
+  if (geometryOffsetY !== 0) {
+    geometry.translate(0, geometryOffsetY, 0);
+  }
   const vertexCount = geometry.getAttribute('position').count;
   const skinIndices = new Uint16Array(vertexCount * 4);
   const skinWeights = new Float32Array(vertexCount * 4);
@@ -261,4 +362,17 @@ function createRiggedScene() {
   scene.add(mesh);
   scene.add(root);
   return scene;
+}
+
+function screenToWorld(point: { x: number; y: number }) {
+  return new Vector3(500 - point.x, 400 - point.y, 0);
+}
+
+function projectAnchorPoint(anchor: Object3D, localPoint: Vector3, cameraZoom = 1) {
+  return localPoint
+    .clone()
+    .multiply(anchor.scale)
+    .applyQuaternion(anchor.quaternion)
+    .add(anchor.position)
+    .multiplyScalar(cameraZoom);
 }

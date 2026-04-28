@@ -61,19 +61,19 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
   }
 
   return (
-    <main className="h-screen overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(60,190,255,0.18)_0%,_rgba(6,16,29,0.96)_42%,_rgba(2,6,12,1)_100%)] text-white xl:overflow-hidden">
-      <div className="mx-auto grid max-w-[1700px] gap-4 px-4 py-4 lg:px-6 xl:h-full xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)_30rem] xl:grid-rows-[auto_minmax(0,1fr)] xl:gap-6">
-        <header className="panel rounded-[2rem] px-5 py-4 xl:col-span-2">
+    <main className="h-screen overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(60,190,255,0.18)_0%,rgba(6,16,29,0.96)_42%,rgba(2,6,12,1)_100%)] text-white xl:overflow-hidden">
+      <div className="mx-auto grid max-w-[1700px] gap-4 px-4 py-4 lg:px-6 xl:h-full xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)_27rem] xl:grid-rows-[auto_minmax(0,1fr)] xl:gap-6">
+        <header className="panel rounded-4xl px-5 py-4 xl:col-span-2">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-cyan-100/72">
                 Model Calibration
               </p>
               <h1 className="mt-2 text-2xl font-semibold tracking-[0.02em] text-white sm:text-3xl">
-                Static jersey tuning lab
+                Anchor-fit tuning lab
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-                Adjust the hardcoded garment root and arm rig settings against a deterministic pose preview,
+                Fine tune only the model fit and sleeve offsets that still affect the anchor-driven jersey,
                 then copy the generated constants back into the code.
               </p>
             </div>
@@ -95,7 +95,7 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
               <button
                 type="button"
                 onClick={copySnippet}
-                className="rounded-full bg-[linear-gradient(135deg,_var(--hisense-cyan),_var(--hisense-blue))] px-5 py-3 text-sm font-bold uppercase tracking-[0.16em] text-slate-950 transition hover:scale-[1.01]"
+                className="rounded-full bg-[linear-gradient(135deg,var(--hisense-cyan),var(--hisense-blue))] px-5 py-3 text-sm font-bold uppercase tracking-[0.16em] text-slate-950 transition hover:scale-[1.01]"
               >
                 Copy Values
               </button>
@@ -103,7 +103,7 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
           </div>
         </header>
 
-        <div className="panel min-h-[28rem] overflow-hidden rounded-[2rem] p-3 sm:p-4 xl:min-h-0">
+        <div className="panel min-h-112 overflow-hidden rounded-4xl p-3 sm:p-4 xl:min-h-0">
           <StageComponent
             shirtCalibration={shirtCalibration}
             rigCalibration={rigCalibration}
@@ -113,42 +113,8 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
           />
         </div>
 
-        <div className="grid min-h-0 min-w-0 gap-4 xl:grid-rows-[auto_auto_minmax(0,1fr)]">
-          <section className="panel rounded-[2rem] p-5">
-            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-cyan-100/72">
-              Quick Controls
-            </p>
-            <div className="mt-4 grid gap-4">
-              <NumberSliderControl
-                label="Garment Opacity"
-                value={garmentOpacity}
-                min={0}
-                max={1}
-                step={0.01}
-                onChange={setGarmentOpacity}
-              />
-              <NumberSliderControl
-                label="Left Sleeve Offset"
-                value={rigCalibration.leftArmZRotationOffset}
-                min={-Math.PI}
-                max={Math.PI}
-                step={0.01}
-                onChange={(value) =>
-                  updateRigCalibration(setRigCalibration, 'leftArmZRotationOffset', value)}
-              />
-              <NumberSliderControl
-                label="Right Sleeve Offset"
-                value={rigCalibration.rightArmZRotationOffset}
-                min={-Math.PI}
-                max={Math.PI}
-                step={0.01}
-                onChange={(value) =>
-                  updateRigCalibration(setRigCalibration, 'rightArmZRotationOffset', value)}
-              />
-            </div>
-          </section>
-
-          <section className="panel rounded-[2rem] p-5">
+        <div className="grid min-h-0 min-w-0 gap-4 xl:grid-rows-[auto_minmax(0,1fr)]">
+          <section className="panel rounded-4xl p-5">
             <p className="text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-cyan-100/72">
               Status
             </p>
@@ -161,107 +127,81 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
             </p>
           </section>
 
-          <section className="panel flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[2rem] p-5">
+          <section className="panel flex min-h-0 min-w-0 flex-col overflow-hidden rounded-4xl p-5">
             <p className="shrink-0 text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-cyan-100/72">
               Generated Snippet
             </p>
             <pre
               data-testid="calibration-snippet"
-              className="mt-4 min-h-0 flex-1 overflow-auto rounded-[1.5rem] border border-white/10 bg-black/30 p-4 text-xs leading-6 text-cyan-50/88"
+              className="mt-4 min-h-0 flex-1 overflow-auto rounded-3xl border border-white/10 bg-black/30 p-4 text-xs leading-6 text-cyan-50/88"
             >
               {calibrationSnippet}
             </pre>
           </section>
         </div>
 
-        <aside className="panel min-h-0 overflow-y-auto rounded-[2rem] p-5 xl:row-span-2 xl:row-start-1 xl:col-start-3">
+        <aside className="panel min-h-0 overflow-y-auto rounded-4xl p-5 xl:row-span-2 xl:row-start-1 xl:col-start-3">
           <div className="grid gap-5">
-            <ControlSection title="Shirt Calibration">
+            <ControlSection
+              title="Garment Fit"
+              description="Small multipliers and offsets applied after the detected shoulder and hip anchors are matched."
+            >
               <NumberSliderControl
-                label="Scale X"
+                label="Garment Opacity"
+                value={garmentOpacity}
+                min={0}
+                max={1}
+                step={0.01}
+                onChange={setGarmentOpacity}
+              />
+              <NumberSliderControl
+                label="Width Scale"
                 value={shirtCalibration.scaleX}
-                min={0.2}
-                max={3}
+                min={0.7}
+                max={1.4}
                 step={0.01}
                 onChange={(value) => updateShirtCalibration(setShirtCalibration, 'scaleX', value)}
               />
               <NumberSliderControl
-                label="Scale Y"
+                label="Height Scale"
                 value={shirtCalibration.scaleY}
-                min={0.2}
-                max={3}
+                min={0.7}
+                max={1.4}
                 step={0.01}
                 onChange={(value) => updateShirtCalibration(setShirtCalibration, 'scaleY', value)}
               />
               <NumberSliderControl
-                label="Scale Z"
+                label="Depth Thickness"
                 value={shirtCalibration.scaleZ}
-                min={0.2}
+                min={0.8}
                 max={4}
                 step={0.01}
                 onChange={(value) => updateShirtCalibration(setShirtCalibration, 'scaleZ', value)}
               />
               <NumberSliderControl
-                label="X Offset"
+                label="Horizontal Offset"
                 value={shirtCalibration.xOffset}
-                min={-1}
-                max={1}
+                min={-0.25}
+                max={0.25}
                 step={0.01}
                 onChange={(value) => updateShirtCalibration(setShirtCalibration, 'xOffset', value)}
               />
               <NumberSliderControl
-                label="Y Offset"
+                label="Vertical Offset"
                 value={shirtCalibration.yOffset}
-                min={-1}
-                max={1}
+                min={-0.25}
+                max={0.25}
                 step={0.01}
                 onChange={(value) => updateShirtCalibration(setShirtCalibration, 'yOffset', value)}
               />
-              <NumberSliderControl
-                label="Z Offset"
-                value={shirtCalibration.zOffset}
-                min={-200}
-                max={200}
-                step={1}
-                onChange={(value) => updateShirtCalibration(setShirtCalibration, 'zOffset', value)}
-              />
-              <NumberSliderControl
-                label="Depth Scale"
-                value={shirtCalibration.depthScale}
-                min={0}
-                max={300}
-                step={1}
-                onChange={(value) => updateShirtCalibration(setShirtCalibration, 'depthScale', value)}
-              />
-              <NumberSliderControl
-                label="Base Rot X"
-                value={shirtCalibration.baseRotation.x}
-                min={-Math.PI}
-                max={Math.PI}
-                step={0.01}
-                onChange={(value) => updateRotation(setShirtCalibration, 'x', value)}
-              />
-              <NumberSliderControl
-                label="Base Rot Y"
-                value={shirtCalibration.baseRotation.y}
-                min={-Math.PI}
-                max={Math.PI}
-                step={0.01}
-                onChange={(value) => updateRotation(setShirtCalibration, 'y', value)}
-              />
-              <NumberSliderControl
-                label="Base Rot Z"
-                value={shirtCalibration.baseRotation.z}
-                min={-Math.PI}
-                max={Math.PI}
-                step={0.01}
-                onChange={(value) => updateRotation(setShirtCalibration, 'z', value)}
-              />
             </ControlSection>
 
-            <ControlSection title="Rig Calibration">
+            <ControlSection
+              title="Sleeve Rig"
+              description="Use only if the sleeves consistently lag ahead or behind the detected arm angle."
+            >
               <NumberSliderControl
-                label="Left Arm Rot Z"
+                label="Left Sleeve Offset"
                 value={rigCalibration.leftArmZRotationOffset}
                 min={-Math.PI}
                 max={Math.PI}
@@ -269,7 +209,7 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
                 onChange={(value) => updateRigCalibration(setRigCalibration, 'leftArmZRotationOffset', value)}
               />
               <NumberSliderControl
-                label="Right Arm Rot Z"
+                label="Right Sleeve Offset"
                 value={rigCalibration.rightArmZRotationOffset}
                 min={-Math.PI}
                 max={Math.PI}
@@ -278,47 +218,10 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
               />
             </ControlSection>
 
-            <ControlSection title="Preview Pose">
-              <NumberSliderControl
-                label="Torso Center X"
-                value={pose.torsoCenterX}
-                min={0.2}
-                max={0.8}
-                step={0.01}
-                onChange={(value) => updatePose(setPose, 'torsoCenterX', value)}
-              />
-              <NumberSliderControl
-                label="Torso Center Y"
-                value={pose.torsoCenterY}
-                min={0.25}
-                max={0.85}
-                step={0.01}
-                onChange={(value) => updatePose(setPose, 'torsoCenterY', value)}
-              />
-              <NumberSliderControl
-                label="Torso Width"
-                value={pose.torsoWidth}
-                min={0.18}
-                max={0.55}
-                step={0.01}
-                onChange={(value) => updatePose(setPose, 'torsoWidth', value)}
-              />
-              <NumberSliderControl
-                label="Torso Height"
-                value={pose.torsoHeight}
-                min={0.25}
-                max={0.75}
-                step={0.01}
-                onChange={(value) => updatePose(setPose, 'torsoHeight', value)}
-              />
-              <NumberSliderControl
-                label="Torso Depth"
-                value={pose.torsoDepth}
-                min={-1}
-                max={1}
-                step={0.01}
-                onChange={(value) => updatePose(setPose, 'torsoDepth', value)}
-              />
+            <ControlSection
+              title="Test Pose"
+              description="Stress the preview pose without changing the production calibration constants."
+            >
               <NumberSliderControl
                 label="Torso Roll"
                 value={pose.torsoRollDeg}
@@ -334,14 +237,6 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
                 max={40}
                 step={1}
                 onChange={(value) => updatePose(setPose, 'torsoYawDeg', value)}
-              />
-              <NumberSliderControl
-                label="Arm Length"
-                value={pose.armLength}
-                min={0.12}
-                max={0.45}
-                step={0.01}
-                onChange={(value) => updatePose(setPose, 'armLength', value)}
               />
               <NumberSliderControl
                 label="Left Arm Angle"
@@ -367,12 +262,23 @@ export function CalibrationPage({ StageComponent = ModelCalibrationStage }: Cali
   )
 }
 
-function ControlSection({ title, children }: { title: string; children: ReactNode }) {
+function ControlSection({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: string
+  children: ReactNode
+}) {
   return (
     <section className="min-w-0">
       <p className="text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-cyan-100/72">
         {title}
       </p>
+      {description ? (
+        <p className="mt-2 text-xs leading-5 text-slate-400">{description}</p>
+      ) : null}
       <div className="mt-4 grid min-w-0 gap-4">{children}</div>
     </section>
   )
@@ -442,20 +348,6 @@ function updateRigCalibration(
   setCalibration((current) => ({
     ...current,
     [key]: value,
-  }))
-}
-
-function updateRotation(
-  setCalibration: Dispatch<SetStateAction<ShirtCalibration>>,
-  axis: 'x' | 'y' | 'z',
-  value: number,
-) {
-  setCalibration((current) => ({
-    ...current,
-    baseRotation: {
-      ...current.baseRotation,
-      [axis]: value,
-    },
   }))
 }
 

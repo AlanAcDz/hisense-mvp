@@ -83,10 +83,20 @@ export interface Point2D {
   y: number;
 }
 
+export interface GarmentAnchorPoints {
+  leftShoulder: Point2D;
+  rightShoulder: Point2D;
+  leftHip: Point2D;
+  rightHip: Point2D;
+  leftArm: Point2D | null;
+  rightArm: Point2D | null;
+}
+
 export interface TorsoTransform {
   center: Point2D;
   topCenter: Point2D;
   bottomCenter: Point2D;
+  anchors: GarmentAnchorPoints;
   widthPx: number;
   heightPx: number;
   depth: number;
