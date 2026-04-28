@@ -21,7 +21,9 @@ describe('usePoseLandmarker segmentation health', () => {
     expect(MEDIAPIPE_WASM_URL).toMatch(/assets\/mediapipe\/wasm$/);
     expect(POSE_MODEL_URL).toMatch(/assets\/mediapipe\/models\/pose_landmarker_full\.task$/);
     expect(POSE_MODEL_URLS.lite).toMatch(/assets\/mediapipe\/models\/pose_landmarker_lite\.task$/);
+    expect(POSE_MODEL_URLS.heavy).toMatch(/assets\/mediapipe\/models\/pose_landmarker_heavy\.task$/);
     expect(getPoseModelUrl('lite')).toBe(POSE_MODEL_URLS.lite);
+    expect(getPoseModelUrl('heavy')).toBe(POSE_MODEL_URLS.heavy);
   });
 
   it('treats missing segmentation as unusable', () => {
