@@ -18,7 +18,10 @@ import { composeCaptureFrame, downloadDataUrl } from '@/lib/mirror/capture/compo
 import { BACKGROUND_VIDEO_ASSET_URL } from '@/lib/mirror/constants';
 import { drawPoseOverlay } from '@/lib/mirror/pose/drawing';
 import { computeRigPose, computeTorsoTransform, getCoverLayout } from '@/lib/mirror/pose/torso';
-import { usePoseLandmarker } from '@/lib/mirror/pose/use-pose-landmarker';
+import {
+  usePoseLandmarker,
+  type PoseLandmarkerOptions,
+} from '@/lib/mirror/pose/use-pose-landmarker';
 import { ShirtSceneController } from '@/lib/mirror/three/shirt-scene';
 import type { MirrorSceneState, StageSize } from '@/lib/mirror/types';
 
@@ -43,10 +46,11 @@ export interface MirrorStageHandle {
 export interface MirrorStageProps {
   jerseyOpacity: number;
   showPosePoints: boolean;
+  poseLandmarkerOptions?: PoseLandmarkerOptions;
   onStatusChange?: (status: string | null) => void;
   onSubjectDetectedChange?: (detected: boolean) => void;
   createSceneController?: () => ShirtSceneControllerRuntime;
-  usePoseLandmarkerRuntime?: () => Pick<
+  usePoseLandmarkerRuntime?: (options?: PoseLandmarkerOptions) => Pick<
     ReturnType<typeof usePoseLandmarker>,
     'detectFrame' | 'error' | 'isLoading'
   >;
@@ -100,6 +104,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   {
     jerseyOpacity,
     showPosePoints,
+    poseLandmarkerOptions,
     onStatusChange,
     onSubjectDetectedChange,
     createSceneController = DEFAULT_CREATE_SCENE_CONTROLLER,
@@ -132,7 +137,8 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
     backgroundGuidance: null,
   });
 
-  const { detectFrame, error: poseError, isLoading: poseModelLoading } = usePoseLandmarkerRuntime();
+  const { detectFrame, error: poseError, isLoading: poseModelLoading } =
+    usePoseLandmarkerRuntime(poseLandmarkerOptions);
   const stageSize = useStageSize(stageRef);
   const statusMessage = useMemo(
     () =>

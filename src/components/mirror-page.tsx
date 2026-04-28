@@ -6,7 +6,13 @@ import {
   type MirrorStageHandle,
   type MirrorStageProps,
 } from '@/components/mirror-stage'
-import { SCREENSAVER_VIDEO_ASSET_URL } from '@/lib/mirror/constants'
+import {
+  DETECTION_INPUT_LONG_EDGE_PX,
+  type DetectionInputLongEdgePx,
+  POSE_MODEL_VARIANT,
+  type PoseModelVariant,
+  SCREENSAVER_VIDEO_ASSET_URL,
+} from '@/lib/mirror/constants'
 
 const SCREENSAVER_IDLE_MS = 60_000
 
@@ -20,6 +26,9 @@ interface MirrorPageProps {
 
 export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
   const [showPosePoints, setShowPosePoints] = useState(false)
+  const [poseModelVariant, setPoseModelVariant] = useState<PoseModelVariant>(POSE_MODEL_VARIANT)
+  const [detectionInputLongEdgePx, setDetectionInputLongEdgePx] =
+    useState<DetectionInputLongEdgePx>(DETECTION_INPUT_LONG_EDGE_PX)
   const [subjectDetected, setSubjectDetected] = useState(false)
   const [showScreensaver, setShowScreensaver] = useState(false)
   const stageRef = useRef<MirrorStageHandle>(null)
@@ -43,6 +52,10 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
         ref={stageRef}
         jerseyOpacity={1}
         showPosePoints={showPosePoints}
+        poseLandmarkerOptions={{
+          modelVariant: poseModelVariant,
+          inputLongEdgePx: detectionInputLongEdgePx,
+        }}
         onSubjectDetectedChange={setSubjectDetected}
       />
 
@@ -69,8 +82,12 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
 
       <MirrorControlsLip
         showPosePoints={showPosePoints}
+        poseModelVariant={poseModelVariant}
+        detectionInputLongEdgePx={detectionInputLongEdgePx}
         onCapture={() => stageRef.current?.capture()}
         onTogglePosePoints={() => setShowPosePoints((current) => !current)}
+        onPoseModelVariantChange={setPoseModelVariant}
+        onDetectionInputLongEdgePxChange={setDetectionInputLongEdgePx}
       />
     </main>
   )

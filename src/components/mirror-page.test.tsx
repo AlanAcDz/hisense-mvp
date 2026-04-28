@@ -2,7 +2,11 @@ import { forwardRef, useEffect, useImperativeHandle } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MirrorPage } from '@/components/mirror-page';
 import type { MirrorStageHandle, MirrorStageProps } from '@/components/mirror-stage';
-import { SCREENSAVER_VIDEO_ASSET_URL } from '@/lib/mirror/constants';
+import {
+  DETECTION_INPUT_LONG_EDGE_PX,
+  POSE_MODEL_VARIANT,
+  SCREENSAVER_VIDEO_ASSET_URL,
+} from '@/lib/mirror/constants';
 
 describe('MirrorPage', () => {
   afterEach(() => {
@@ -38,8 +42,8 @@ describe('MirrorPage', () => {
     expect(
       screen.getByText(/Colócate frente a la pantalla para comenzar la experiencia/i)
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /capture/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /show pose points/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /capturar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /mostrar puntos de pose/i })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-jersey-opacity', '1');
     expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-show-points', 'false');
   });
@@ -79,12 +83,48 @@ describe('MirrorPage', () => {
 
     expect(screen.queryByRole('button', { name: /mostrar controles completos/i })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /mostrar configuracion/i }));
+    fireEvent.click(screen.getByRole('button', { name: /mostrar configuración/i }));
 
     expect(screen.getByRole('button', { name: /mostrar controles completos/i })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /calibration lab/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /capture/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /show pose points/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /laboratorio de calibración/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /capturar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /mostrar puntos de pose/i })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /modelo/i })).toHaveValue(POSE_MODEL_VARIANT);
+    expect(screen.getByRole('combobox', { name: /resolución/i })).toHaveValue(
+      String(DETECTION_INPUT_LONG_EDGE_PX)
+    );
+  });
+
+  it('updates pose model and detection resolution from the controls lip', () => {
+    const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(
+      { poseLandmarkerOptions },
+      ref
+    ) {
+      useImperativeHandle(ref, () => ({
+        capture() {},
+      }));
+
+      return (
+        <div
+          data-testid="mirror-stage"
+          data-pose-model={poseLandmarkerOptions?.modelVariant}
+          data-detection-resolution={poseLandmarkerOptions?.inputLongEdgePx}
+        />
+      );
+    });
+
+    render(<MirrorPage StageComponent={FakeStage} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /mostrar configuración/i }));
+    fireEvent.change(screen.getByRole('combobox', { name: /modelo/i }), {
+      target: { value: 'heavy' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: /resolución/i }), {
+      target: { value: '1024' },
+    });
+
+    expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-pose-model', 'heavy');
+    expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-detection-resolution', '1024');
   });
 
   it('forwards capture requests to the live stage handle', () => {
@@ -108,7 +148,7 @@ describe('MirrorPage', () => {
 
     render(<MirrorPage StageComponent={FakeStage} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /capture/i }));
+    fireEvent.click(screen.getByRole('button', { name: /capturar/i }));
 
     expect(captureSpy).toHaveBeenCalledTimes(1);
   });
@@ -139,9 +179,9 @@ describe('MirrorPage', () => {
 
     render(<MirrorPage StageComponent={FakeStage} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /mostrar configuracion/i }));
-    fireEvent.click(screen.getByRole('button', { name: /show pose points/i }));
-    fireEvent.click(screen.getByRole('button', { name: /capture/i }));
+    fireEvent.click(screen.getByRole('button', { name: /mostrar configuración/i }));
+    fireEvent.click(screen.getByRole('button', { name: /mostrar puntos de pose/i }));
+    fireEvent.click(screen.getByRole('button', { name: /capturar/i }));
 
     expect(screen.queryByText(/using proxy sleeves instead/i)).not.toBeInTheDocument();
     expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-jersey-opacity', '1');
