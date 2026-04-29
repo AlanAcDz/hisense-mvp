@@ -44,6 +44,9 @@ type ShirtSceneControllerRuntime = Pick<
 >;
 
 const DEFAULT_CREATE_SCENE_CONTROLLER = () => new ShirtSceneController();
+const PREFERRED_CAMERA_WIDTH_PX = 3840;
+const PREFERRED_CAMERA_HEIGHT_PX = 2160;
+const PREFERRED_CAMERA_FRAME_RATE = 30;
 
 export interface MirrorStageHandle {
   capture: () => void;
@@ -104,6 +107,44 @@ function clearCanvas(canvas: HTMLCanvasElement | null, stageSize: StageSize) {
   }
 
   ctx.clearRect(0, 0, stageSize.width, stageSize.height);
+}
+
+function getMaxCameraConstraint(
+  range: MediaSettingsRange | undefined,
+  preferredValue: number,
+  exact = false
+): ConstrainULong | undefined {
+  if (!range?.max) {
+    return { ideal: preferredValue };
+  }
+
+  return exact ? { exact: range.max } : { ideal: range.max };
+}
+
+async function requestMaximumCameraResolution(stream: MediaStream) {
+  const track = stream.getVideoTracks?.()[0];
+  if (!track?.getCapabilities || !track.applyConstraints) {
+    return;
+  }
+
+  const capabilities = track.getCapabilities();
+  const constraints: MediaTrackConstraints = {
+    width: getMaxCameraConstraint(capabilities.width, PREFERRED_CAMERA_WIDTH_PX, true),
+    height: getMaxCameraConstraint(capabilities.height, PREFERRED_CAMERA_HEIGHT_PX, true),
+    frameRate: capabilities.frameRate?.max
+      ? { ideal: Math.min(capabilities.frameRate.max, PREFERRED_CAMERA_FRAME_RATE) }
+      : { ideal: PREFERRED_CAMERA_FRAME_RATE },
+  };
+
+  try {
+    await track.applyConstraints(constraints);
+  } catch {
+    await track.applyConstraints({
+      width: getMaxCameraConstraint(capabilities.width, PREFERRED_CAMERA_WIDTH_PX),
+      height: getMaxCameraConstraint(capabilities.height, PREFERRED_CAMERA_HEIGHT_PX),
+      frameRate: { ideal: PREFERRED_CAMERA_FRAME_RATE },
+    });
+  }
 }
 
 export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function MirrorStage(
@@ -267,8 +308,9 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
           audio: false,
           video: {
             facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: PREFERRED_CAMERA_WIDTH_PX },
+            height: { ideal: PREFERRED_CAMERA_HEIGHT_PX },
+            frameRate: { ideal: PREFERRED_CAMERA_FRAME_RATE },
           },
         });
 
@@ -278,6 +320,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         }
 
         streamRef.current = stream;
+        await requestMaximumCameraResolution(stream);
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;

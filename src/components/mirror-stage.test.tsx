@@ -45,6 +45,17 @@ function buildWorldLandmarks(visibility = 0.98) {
 }
 
 describe('MirrorStage', () => {
+  const createCameraStream = (track: Partial<MediaStreamTrack> = {}) => {
+    const cameraTrack = {
+      stop: vi.fn(),
+      ...track,
+    } as MediaStreamTrack;
+
+    return {
+      getTracks: () => [cameraTrack],
+      getVideoTracks: () => [cameraTrack],
+    } as unknown as MediaStream;
+  };
   const getUserMediaMock = vi.fn().mockResolvedValue({
     getTracks: () => [{ stop: vi.fn() }],
   });
@@ -154,6 +165,7 @@ describe('MirrorStage', () => {
   beforeEach(() => {
     queuedFrames = [];
     getUserMediaMock.mockClear();
+    getUserMediaMock.mockResolvedValue(createCameraStream());
     Object.values(shirtSceneSpies).forEach((spy) => spy.mockClear());
 
     requestAnimationFrameMock.mockImplementation((callback) => {
@@ -172,6 +184,62 @@ describe('MirrorStage', () => {
       nextFrame(timestamp);
     });
   }
+
+  it('requests the highest practical camera resolution', async () => {
+    const applyConstraints = vi.fn().mockResolvedValue(undefined);
+    getUserMediaMock.mockResolvedValue(
+      createCameraStream({
+        applyConstraints,
+        getCapabilities: () =>
+          ({
+            width: { max: 2560 },
+            height: { max: 1440 },
+            frameRate: { max: 60 },
+          }) as MediaTrackCapabilities,
+      })
+    );
+
+    render(
+      <MirrorStage
+        jerseyOpacity={0.1}
+        showPosePoints={false}
+        createSceneController={() => ({
+          canvas: document.createElement('canvas'),
+          dispose: shirtSceneSpies.dispose,
+          loadShirtModel: shirtSceneSpies.loadShirtModel,
+          render: shirtSceneSpies.render,
+          resize: shirtSceneSpies.resize,
+          setJerseyOpacity: shirtSceneSpies.setJerseyOpacity,
+          updateRigPose: shirtSceneSpies.updateRigPose,
+          updateShirtTransform: shirtSceneSpies.updateShirtTransform,
+        })}
+        usePoseLandmarkerRuntime={() => ({
+          detectFrame: () => ({ poseFrame: null, segmentationFrame: null }),
+          error: null,
+          isLoading: false,
+        })}
+      />
+    );
+
+    await waitFor(() =>
+      expect(getUserMediaMock).toHaveBeenCalledWith({
+        audio: false,
+        video: {
+          facingMode: 'user',
+          width: { ideal: 3840 },
+          height: { ideal: 2160 },
+          frameRate: { ideal: 30 },
+        },
+      })
+    );
+    await waitFor(() =>
+      expect(applyConstraints).toHaveBeenCalledWith({
+        width: { exact: 2560 },
+        height: { exact: 1440 },
+        frameRate: { ideal: 30 },
+      })
+    );
+  });
 
   it('shows paused guidance while keeping shirt tracking active', async () => {
     const poseFrame = createPoseFrame(buildNormalizedLandmarks(), buildWorldLandmarks(), 1000);
