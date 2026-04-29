@@ -3,10 +3,11 @@ import {
   copySegmentationAlpha,
   createBackgroundMatte,
   dilateAlphaMask,
+  drawArmOcclusionLayer,
   drawBackgroundLayer,
   resolveBackgroundMatte,
 } from '@/lib/mirror/background/compositor';
-import type { BackgroundMatte, SegmentationFrame } from '@/lib/mirror/types';
+import type { BackgroundMatte, PoseFrame, PoseLandmark2D, SegmentationFrame } from '@/lib/mirror/types';
 
 function createSegmentationFrame(
   width: number,
@@ -20,6 +21,50 @@ function createSegmentationFrame(
     alpha: values,
     timestamp,
   };
+}
+
+function createPoseFrameWithForearm() {
+  const normalizedLandmarks = [] as PoseLandmark2D[];
+  normalizedLandmarks[13] = { x: 0.25, y: 0.4, z: 0, visibility: 1 };
+  normalizedLandmarks[15] = { x: 0.5, y: 0.55, z: 0, visibility: 1 };
+
+  return {
+    normalizedLandmarks,
+    worldLandmarks: [],
+    timestamp: 1000,
+    torso: null,
+    leftArm: null,
+    rightArm: null,
+  } satisfies PoseFrame;
+}
+
+function createArmLayerContext() {
+  const calls: Array<{ name: string; args: unknown[] }> = [];
+  const record = (name: string) => (...args: unknown[]) => {
+    calls.push({ name, args });
+  };
+  const ctx = {
+    arc: record('arc'),
+    beginPath: record('beginPath'),
+    clearRect: record('clearRect'),
+    drawImage: record('drawImage'),
+    fill: record('fill'),
+    lineTo: record('lineTo'),
+    moveTo: record('moveTo'),
+    restore: record('restore'),
+    save: record('save'),
+    scale: record('scale'),
+    stroke: record('stroke'),
+    translate: record('translate'),
+    set fillStyle(_value: string) {},
+    set globalCompositeOperation(_value: GlobalCompositeOperation) {},
+    set lineCap(_value: CanvasLineCap) {},
+    set lineJoin(_value: CanvasLineJoin) {},
+    set lineWidth(_value: number) {},
+    set strokeStyle(_value: string) {},
+  } as unknown as CanvasRenderingContext2D;
+
+  return { calls, ctx };
 }
 
 describe('background compositor', () => {
@@ -259,5 +304,36 @@ describe('background compositor', () => {
     drawBackgroundLayer(ctx, { width: 300, height: 300 }, backgroundImage);
 
     expect(drawImage).toHaveBeenCalledWith(backgroundImage, 0, -150, 300, 600);
+  });
+
+  it('can copy arm pixels from the already matted stage foreground', () => {
+    const { calls, ctx } = createArmLayerContext();
+    const sourceCanvas = document.createElement('canvas');
+    const stageSize = { width: 100, height: 100 };
+
+    drawArmOcclusionLayer({
+      ctx,
+      coverLayout: {
+        offsetX: 10,
+        offsetY: 0,
+        width: 80,
+        height: 100,
+      },
+      stageSize,
+      source: sourceCanvas,
+      sourceSpace: 'stage',
+      poseFrame: createPoseFrameWithForearm(),
+    });
+
+    expect(calls.find((call) => call.name === 'drawImage')?.args).toEqual([
+      sourceCanvas,
+      0,
+      0,
+      stageSize.width,
+      stageSize.height,
+    ]);
+    expect(calls.some((call) => call.name === 'scale')).toBe(false);
+    expect(calls.find((call) => call.name === 'moveTo')?.args).toEqual([70, 40]);
+    expect(calls.find((call) => call.name === 'lineTo')?.args).toEqual([50, expect.closeTo(55, 10)]);
   });
 });

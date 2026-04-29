@@ -12,8 +12,18 @@ import {
   BACKGROUND_MASK_STAY_THRESHOLD,
   BACKGROUND_MASK_STALE_MS,
   BACKGROUND_MASK_THRESHOLD,
+  LANDMARK_INDICES,
 } from '@/lib/mirror/constants';
-import type { BackgroundMatte, CoverLayout, SegmentationFrame, StageSize } from '@/lib/mirror/types';
+import { mapNormalizedToStagePoint } from '@/lib/mirror/pose/torso';
+import type {
+  BackgroundMatte,
+  CoverLayout,
+  Point2D,
+  PoseFrame,
+  PoseLandmark2D,
+  SegmentationFrame,
+  StageSize,
+} from '@/lib/mirror/types';
 
 interface BackgroundMatteResolution {
   matte: BackgroundMatte | null;
@@ -37,6 +47,33 @@ interface DrawForegroundLayerOptions {
   mirror?: boolean;
 }
 
+interface DrawArmOcclusionLayerOptions {
+  ctx: CanvasRenderingContext2D;
+  coverLayout: CoverLayout;
+  stageSize: StageSize;
+  source: CanvasImageSource;
+  sourceSpace?: 'video' | 'stage';
+  poseFrame: PoseFrame | null;
+  debug?: boolean;
+  mirror?: boolean;
+  mirrorSource?: boolean;
+}
+
+interface DrawArmOcclusionMaskLayerOptions {
+  ctx: CanvasRenderingContext2D;
+  coverLayout: CoverLayout;
+  stageSize: StageSize;
+  poseFrame: PoseFrame | null;
+  clipCanvas?: HTMLCanvasElement | null;
+  mirror?: boolean;
+}
+
+interface ArmOcclusionSegment {
+  elbow: Point2D;
+  wrist: Point2D;
+  handPoints: Point2D[];
+}
+
 interface JointBilateralFilterOptions {
   edgeThreshold?: number;
   radius?: number;
@@ -44,10 +81,182 @@ interface JointBilateralFilterOptions {
   sigmaSpatial?: number;
 }
 
+const ARM_OCCLUSION_MIN_LENGTH_PX = 8;
+const ARM_OCCLUSION_MIN_WIDTH_PX = 22;
+const ARM_OCCLUSION_MAX_WIDTH_RATIO = 0.095;
+const ARM_OCCLUSION_FOREARM_WIDTH_RATIO = 0.34;
+const ARM_OCCLUSION_HAND_WIDTH_RATIO = 1.15;
+const ARM_OCCLUSION_HAND_RADIUS_RATIO = 0.55;
+
 const colorWeightCache = new Map<number, Float32Array>();
 
 function clamp01(value: number) {
   return Math.max(0, Math.min(1, value));
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function distance2D(a: Point2D, b: Point2D) {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function hasVisibleLandmark(landmark: PoseLandmark2D | undefined) {
+  return Boolean(landmark);
+}
+
+function getVisibleStagePoint(
+  poseFrame: PoseFrame,
+  index: number,
+  stageSize: StageSize,
+  coverLayout: CoverLayout,
+  mirror: boolean
+) {
+  const landmark = poseFrame.normalizedLandmarks[index];
+  if (!hasVisibleLandmark(landmark)) {
+    return null;
+  }
+
+  const point = mapNormalizedToStagePoint(landmark, stageSize, coverLayout);
+  if (!mirror) {
+    return point;
+  }
+
+  return {
+    x: stageSize.width - point.x,
+    y: point.y,
+  };
+}
+
+function getArmOcclusionSegments(
+  poseFrame: PoseFrame | null,
+  stageSize: StageSize,
+  coverLayout: CoverLayout,
+  mirror: boolean
+) {
+  if (!poseFrame) {
+    return [];
+  }
+
+  const armIndices = [
+    {
+      elbow: LANDMARK_INDICES.leftElbow,
+      wrist: LANDMARK_INDICES.leftWrist,
+      hand: [LANDMARK_INDICES.leftPinky, LANDMARK_INDICES.leftIndex, LANDMARK_INDICES.leftThumb],
+    },
+    {
+      elbow: LANDMARK_INDICES.rightElbow,
+      wrist: LANDMARK_INDICES.rightWrist,
+      hand: [LANDMARK_INDICES.rightPinky, LANDMARK_INDICES.rightIndex, LANDMARK_INDICES.rightThumb],
+    },
+  ] as const;
+
+  return armIndices.reduce<ArmOcclusionSegment[]>((segments, arm) => {
+    const elbow = getVisibleStagePoint(poseFrame, arm.elbow, stageSize, coverLayout, mirror);
+    const wrist = getVisibleStagePoint(poseFrame, arm.wrist, stageSize, coverLayout, mirror);
+    if (!elbow || !wrist || distance2D(elbow, wrist) < ARM_OCCLUSION_MIN_LENGTH_PX) {
+      return segments;
+    }
+
+    const handPoints = arm.hand
+      .map((index) => getVisibleStagePoint(poseFrame, index, stageSize, coverLayout, mirror))
+      .filter((point): point is Point2D => Boolean(point));
+
+    segments.push({ elbow, wrist, handPoints });
+    return segments;
+  }, []);
+}
+
+function midpoint2D(points: Point2D[]) {
+  return {
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+  };
+}
+
+function drawArmOcclusionMask(
+  ctx: CanvasRenderingContext2D,
+  segments: ArmOcclusionSegment[],
+  stageSize: StageSize,
+  color = '#ffffff'
+) {
+  const maxWidth = Math.max(ARM_OCCLUSION_MIN_WIDTH_PX, stageSize.width * ARM_OCCLUSION_MAX_WIDTH_RATIO);
+
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+
+  segments.forEach((segment) => {
+    const forearmLength = distance2D(segment.elbow, segment.wrist);
+    const forearmWidth = clamp(
+      forearmLength * ARM_OCCLUSION_FOREARM_WIDTH_RATIO,
+      ARM_OCCLUSION_MIN_WIDTH_PX,
+      maxWidth
+    );
+    const handWidth = forearmWidth * ARM_OCCLUSION_HAND_WIDTH_RATIO;
+    const handRadius = forearmWidth * ARM_OCCLUSION_HAND_RADIUS_RATIO;
+    const handCenter = segment.handPoints.length > 0
+      ? midpoint2D(segment.handPoints)
+      : {
+          x: segment.wrist.x + (segment.wrist.x - segment.elbow.x) * 0.18,
+          y: segment.wrist.y + (segment.wrist.y - segment.elbow.y) * 0.18,
+        };
+
+    ctx.lineWidth = forearmWidth;
+    ctx.lineCap = 'butt';
+    ctx.beginPath();
+    ctx.moveTo(segment.elbow.x, segment.elbow.y);
+    ctx.lineTo(segment.wrist.x, segment.wrist.y);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(segment.wrist.x, segment.wrist.y, forearmWidth * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.lineCap = 'round';
+    ctx.lineWidth = handWidth;
+    if (segment.handPoints.length > 0) {
+      ctx.beginPath();
+      ctx.moveTo(segment.wrist.x, segment.wrist.y);
+      segment.handPoints
+        .slice()
+        .sort((first, second) => {
+          const firstAngle = Math.atan2(first.y - handCenter.y, first.x - handCenter.x);
+          const secondAngle = Math.atan2(second.y - handCenter.y, second.x - handCenter.x);
+          return firstAngle - secondAngle;
+        })
+        .forEach((handPoint) => {
+          ctx.lineTo(handPoint.x, handPoint.y);
+        });
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(segment.wrist.x, segment.wrist.y);
+      ctx.lineTo(handCenter.x, handCenter.y);
+      ctx.stroke();
+
+      segment.handPoints.forEach((handPoint) => {
+        ctx.beginPath();
+        ctx.moveTo(segment.wrist.x, segment.wrist.y);
+        ctx.lineTo(handPoint.x, handPoint.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(handPoint.x, handPoint.y, handRadius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      return;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(segment.wrist.x, segment.wrist.y);
+    ctx.lineTo(handCenter.x, handCenter.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(handCenter.x, handCenter.y, handRadius, 0, Math.PI * 2);
+    ctx.fill();
+  });
 }
 
 function getColorWeightLookup(sigmaColor: number) {
@@ -603,6 +812,120 @@ export function drawForegroundLayer({
     coverLayout.width,
     coverLayout.height
   );
+  ctx.restore();
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+export function drawArmOcclusionLayer({
+  ctx,
+  coverLayout,
+  stageSize,
+  source,
+  sourceSpace = 'video',
+  poseFrame,
+  debug = false,
+  mirror = true,
+  mirrorSource,
+}: DrawArmOcclusionLayerOptions) {
+  ctx.clearRect(0, 0, stageSize.width, stageSize.height);
+
+  const segments = getArmOcclusionSegments(poseFrame, stageSize, coverLayout, mirror);
+  if (segments.length === 0) {
+    if (debug) {
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+      ctx.fillRect(16, 16, 32, 32);
+    }
+
+    return;
+  }
+
+  const shouldMirrorSource = mirrorSource ?? (sourceSpace === 'video' ? mirror : false);
+  const sourceLayout =
+    sourceSpace === 'stage'
+      ? {
+          offsetX: 0,
+          offsetY: 0,
+          width: stageSize.width,
+          height: stageSize.height,
+        }
+      : coverLayout;
+
+  ctx.save();
+  if (shouldMirrorSource) {
+    ctx.translate(stageSize.width, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(source, sourceLayout.offsetX, sourceLayout.offsetY, sourceLayout.width, sourceLayout.height);
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-in';
+  drawArmOcclusionMask(ctx, segments, stageSize);
+  ctx.restore();
+
+  ctx.globalCompositeOperation = 'source-over';
+
+  if (debug) {
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(255, 0, 180, 1)';
+    segments.forEach((segment) => {
+      ctx.beginPath();
+      ctx.moveTo(segment.elbow.x, segment.elbow.y);
+      ctx.lineTo(segment.wrist.x, segment.wrist.y);
+      ctx.stroke();
+    });
+    ctx.restore();
+
+    const previewWidth = Math.min(180, stageSize.width * 0.22);
+    const previewHeight = previewWidth * (9 / 16);
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+    ctx.fillRect(12, 12, previewWidth + 8, previewHeight + 30);
+    ctx.strokeStyle = 'rgba(255, 0, 180, 1)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(16, 16, previewWidth, previewHeight);
+    if (shouldMirrorSource) {
+      ctx.translate(16 + previewWidth, 16);
+      ctx.scale(-1, 1);
+      ctx.drawImage(source, 0, 0, previewWidth, previewHeight);
+    } else {
+      ctx.drawImage(source, 16, 16, previewWidth, previewHeight);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('arm source', 18, previewHeight + 38);
+    ctx.restore();
+  }
+}
+
+export function drawArmOcclusionMaskLayer({
+  ctx,
+  coverLayout,
+  stageSize,
+  poseFrame,
+  clipCanvas,
+  mirror = true,
+}: DrawArmOcclusionMaskLayerOptions) {
+  ctx.clearRect(0, 0, stageSize.width, stageSize.height);
+
+  const segments = getArmOcclusionSegments(poseFrame, stageSize, coverLayout, mirror);
+  if (segments.length === 0) {
+    return;
+  }
+
+  drawArmOcclusionMask(ctx, segments, stageSize);
+
+  if (!clipCanvas) {
+    return;
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.drawImage(clipCanvas, 0, 0, stageSize.width, stageSize.height);
   ctx.restore();
   ctx.globalCompositeOperation = 'source-over';
 }

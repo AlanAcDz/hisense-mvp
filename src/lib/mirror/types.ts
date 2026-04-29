@@ -125,7 +125,10 @@ export interface CaptureCompositionOptions {
   backgroundCanvas: HTMLCanvasElement | null;
   foregroundCanvas: HTMLCanvasElement | null;
   rendererCanvas: HTMLCanvasElement;
+  shirtCutoutMaskCanvas?: HTMLCanvasElement | null;
+  armOverlayCanvas?: HTMLCanvasElement | null;
   poseCanvas: HTMLCanvasElement | null;
+  scratchCanvas?: HTMLCanvasElement | null;
   outputWidth: number;
   outputHeight: number;
   showPosePoints: boolean;
