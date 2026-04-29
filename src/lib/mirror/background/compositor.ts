@@ -47,6 +47,13 @@ interface DrawForegroundLayerOptions {
   mirror?: boolean;
 }
 
+interface DrawStageForegroundLayerOptions {
+  ctx: CanvasRenderingContext2D;
+  stageSize: StageSize;
+  source: CanvasImageSource;
+  maskCanvas: HTMLCanvasElement;
+}
+
 interface DrawArmOcclusionLayerOptions {
   ctx: CanvasRenderingContext2D;
   coverLayout: CoverLayout;
@@ -819,6 +826,22 @@ export function drawForegroundLayer({
     coverLayout.width,
     coverLayout.height
   );
+  ctx.restore();
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+export function drawStageForegroundLayer({
+  ctx,
+  stageSize,
+  source,
+  maskCanvas,
+}: DrawStageForegroundLayerOptions) {
+  ctx.clearRect(0, 0, stageSize.width, stageSize.height);
+  ctx.drawImage(source, 0, 0, stageSize.width, stageSize.height);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.drawImage(maskCanvas, 0, 0, stageSize.width, stageSize.height);
   ctx.restore();
   ctx.globalCompositeOperation = 'source-over';
 }

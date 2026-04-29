@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  BACKGROUND_MASK_DRAW_BLUR_PX,
   VIDEO_MATTING_DOWNSAMPLE_RATIO,
   VIDEO_MATTING_INPUT_LONG_EDGE_PX,
   VIDEO_MATTING_INTERVAL_MS,
   VIDEO_MATTING_MODEL_URL,
 } from '@/lib/mirror/constants';
+import type { CoverLayout, StageSize } from '@/lib/mirror/types';
+import {
+  type TfjsWebGLBackend,
+  RvmWebGLForegroundCompositor,
+} from './webgl-foreground-compositor';
 
 type Tf = typeof import('@tensorflow/tfjs');
+type TfWithWebGLContext = Tf & {
+  setWebGLContext?: (webGLVersion: number, gl: WebGLRenderingContext) => void;
+};
 type GraphModel = import('@tensorflow/tfjs').GraphModel;
 type Tensor = import('@tensorflow/tfjs').Tensor;
 type Tensor3D = import('@tensorflow/tfjs').Tensor3D;
@@ -27,6 +36,9 @@ export interface RobustVideoMattingOptions {
 export interface VideoMattingStats {
   fps: number;
   inferenceMs: number;
+  snapshotMs: number;
+  modelMs: number;
+  maskMs: number;
   inputWidth: number;
   inputHeight: number;
   backend: string | null;
@@ -40,10 +52,27 @@ export interface VideoMattingFrame {
   timestamp: number;
 }
 
+export interface VideoMattingSnapshotOptions {
+  coverLayout: CoverLayout;
+  mirror?: boolean;
+  stageSize: StageSize;
+}
+
 let tfPromise: Promise<Tf> | null = null;
 let modelPromise: Promise<GraphModel> | null = null;
 let modelInstance: GraphModel | null = null;
 let modelInstanceUrl: string | null = null;
+let tfWebGLCanvas: HTMLCanvasElement | null = null;
+
+const WEBGL_CONTEXT_ATTRIBUTES: WebGLContextAttributes = {
+  alpha: true,
+  antialias: false,
+  depth: false,
+  failIfMajorPerformanceCaveat: false,
+  premultipliedAlpha: false,
+  preserveDrawingBuffer: false,
+  stencil: false,
+};
 
 function getMattingInputSize(videoWidth: number, videoHeight: number, inputLongEdgePx: number) {
   const longEdge = Math.max(videoWidth, videoHeight);
@@ -62,6 +91,14 @@ async function loadTensorFlow() {
   if (!tfPromise) {
     tfPromise = import('@tensorflow/tfjs').then(async (tf) => {
       try {
+        const gl = createSharedWebGLContext();
+        if (gl) {
+          const version =
+            typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext
+              ? 2
+              : 1;
+          (tf as TfWithWebGLContext).setWebGLContext?.(version, gl as WebGLRenderingContext);
+        }
         await tf.setBackend('webgl');
       } catch {
         await tf.setBackend('cpu');
@@ -72,6 +109,25 @@ async function loadTensorFlow() {
   }
 
   return tfPromise;
+}
+
+function createSharedWebGLContext() {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  if (!tfWebGLCanvas) {
+    tfWebGLCanvas = document.createElement('canvas');
+  }
+
+  return (
+    tfWebGLCanvas.getContext('webgl2', WEBGL_CONTEXT_ATTRIBUTES) ??
+    tfWebGLCanvas.getContext('webgl', WEBGL_CONTEXT_ATTRIBUTES) ??
+    (tfWebGLCanvas.getContext(
+      'experimental-webgl',
+      WEBGL_CONTEXT_ATTRIBUTES
+    ) as WebGLRenderingContext | null)
+  );
 }
 
 async function loadMattingModel(modelUrl: string) {
@@ -119,6 +175,26 @@ function resetRecurrentState(tf: Tf | null, stateRef: { current: [Tensor, Tensor
   stateRef.current = null;
 }
 
+function syncOpaqueMaskCanvas(
+  canvasRef: { current: HTMLCanvasElement | null },
+  stageSize: StageSize
+) {
+  const canvas = canvasRef.current ?? document.createElement('canvas');
+  canvasRef.current = canvas;
+
+  if (canvas.width !== stageSize.width || canvas.height !== stageSize.height) {
+    canvas.width = stageSize.width;
+    canvas.height = stageSize.height;
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, stageSize.width, stageSize.height);
+    }
+  }
+
+  return canvas;
+}
+
 function normalizeOutputs(outputs: Tensor | Tensor[]) {
   if (!Array.isArray(outputs) || outputs.length !== 6) {
     throw new Error('RVM returned an unexpected output shape.');
@@ -139,6 +215,9 @@ export function useRobustVideoMatting({
   const [stats, setStats] = useState<VideoMattingStats>({
     fps: 0,
     inferenceMs: 0,
+    snapshotMs: 0,
+    modelMs: 0,
+    maskMs: 0,
     inputWidth: 0,
     inputHeight: 0,
     backend: null,
@@ -150,8 +229,12 @@ export function useRobustVideoMatting({
   const recurrentStateRef = useRef<[Tensor, Tensor, Tensor, Tensor] | null>(null);
   const recurrentInputSizeRef = useRef<MattingInputSize | null>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const opaqueMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const displaySourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const pendingSourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const displayMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pendingMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const webglCompositorRef = useRef<RvmWebGLForegroundCompositor | null>(null);
   const frameRef = useRef<VideoMattingFrame | null>(null);
   const inFlightRef = useRef(false);
   const statsRef = useRef({
@@ -205,6 +288,7 @@ export function useRobustVideoMatting({
   useEffect(
     () => () => {
       resetRecurrentState(tfRef.current, recurrentStateRef);
+      webglCompositorRef.current?.dispose();
     },
     []
   );
@@ -213,7 +297,8 @@ export function useRobustVideoMatting({
     (
       videoElement: HTMLVideoElement,
       now: number,
-      lastDetectedAtRef: { current: number }
+      lastDetectedAtRef: { current: number },
+      snapshotOptions?: VideoMattingSnapshotOptions
     ) => {
       if (
         !enabled ||
@@ -247,6 +332,7 @@ export function useRobustVideoMatting({
         let maskTensor: Tensor | null = null;
         let downsampleRatioTensor: Tensor | null = null;
         let pendingSourceCanvas: HTMLCanvasElement | null = null;
+        let pendingMaskCanvas: HTMLCanvasElement | null = null;
 
         try {
           if (!mattingCanvasRef.current) {
@@ -275,32 +361,46 @@ export function useRobustVideoMatting({
             throw new Error('Unable to create video matting canvas context.');
           }
 
-          pendingSourceCanvas = pendingSourceCanvasRef.current ?? document.createElement('canvas');
-          if (
-            pendingSourceCanvas.width !== videoElement.videoWidth ||
-            pendingSourceCanvas.height !== videoElement.videoHeight
-          ) {
-            pendingSourceCanvas.width = videoElement.videoWidth;
-            pendingSourceCanvas.height = videoElement.videoHeight;
+          const snapshotStartedAt = performance.now();
+
+          if (snapshotOptions) {
+            pendingSourceCanvas = pendingSourceCanvasRef.current ?? document.createElement('canvas');
+            const { coverLayout, mirror = true, stageSize } = snapshotOptions;
+            if (
+              pendingSourceCanvas.width !== stageSize.width ||
+              pendingSourceCanvas.height !== stageSize.height
+            ) {
+              pendingSourceCanvas.width = stageSize.width;
+              pendingSourceCanvas.height = stageSize.height;
+            }
+
+            const pendingSourceContext =
+              pendingSourceCanvas.getContext('2d', {
+                alpha: false,
+                desynchronized: true,
+              }) ?? pendingSourceCanvas.getContext('2d');
+
+            if (!pendingSourceContext) {
+              throw new Error('Unable to create video matting source context.');
+            }
+
+            pendingSourceContext.clearRect(0, 0, stageSize.width, stageSize.height);
+            pendingSourceContext.save();
+            if (mirror) {
+              pendingSourceContext.translate(stageSize.width, 0);
+              pendingSourceContext.scale(-1, 1);
+            }
+            pendingSourceContext.drawImage(
+              videoElement,
+              coverLayout.offsetX,
+              coverLayout.offsetY,
+              coverLayout.width,
+              coverLayout.height
+            );
+            pendingSourceContext.restore();
           }
 
-          const pendingSourceContext =
-            pendingSourceCanvas.getContext('2d', {
-              alpha: false,
-              desynchronized: true,
-            }) ?? pendingSourceCanvas.getContext('2d');
-
-          if (!pendingSourceContext) {
-            throw new Error('Unable to create video matting source context.');
-          }
-
-          pendingSourceContext.drawImage(
-            videoElement,
-            0,
-            0,
-            pendingSourceCanvas.width,
-            pendingSourceCanvas.height
-          );
+          const snapshotCompletedAt = performance.now();
 
           const previousInputSize = recurrentInputSizeRef.current;
           if (
@@ -311,7 +411,7 @@ export function useRobustVideoMatting({
             recurrentInputSizeRef.current = inputSize;
           }
 
-          mattingContext.drawImage(pendingSourceCanvas, 0, 0, inputSize.width, inputSize.height);
+          mattingContext.drawImage(videoElement, 0, 0, inputSize.width, inputSize.height);
           recurrentStateRef.current ??= createInitialRecurrentState(tf);
           const [r1i, r2i, r3i, r4i] = recurrentStateRef.current;
           downsampleRatioTensor = tf.scalar(downsampleRatio);
@@ -320,6 +420,7 @@ export function useRobustVideoMatting({
             tf.browser.fromPixels(mattingCanvas).toFloat().expandDims(0).div(255)
           );
 
+          const modelStartedAt = performance.now();
           outputs = normalizeOutputs(
             await model.executeAsync(
               {
@@ -333,42 +434,127 @@ export function useRobustVideoMatting({
               ['fgr', 'pha', 'r1o', 'r2o', 'r3o', 'r4o']
             )
           );
+          const modelCompletedAt = performance.now();
 
           const [fgr, pha, r1o, r2o, r3o, r4o] = outputs;
           const [, height = 0, width = 0] = pha.shape;
+          let maskCompletedAt = modelCompletedAt;
+          let nextSourceCanvas = pendingSourceCanvas ?? mattingCanvas;
+          let nextMaskCanvas: HTMLCanvasElement | null = null;
 
-          if (!maskCanvasRef.current) {
-            maskCanvasRef.current = document.createElement('canvas');
+          if (snapshotOptions && pendingSourceCanvas && tf.getBackend() === 'webgl') {
+            webglCompositorRef.current ??= new RvmWebGLForegroundCompositor();
+            const foregroundCanvas = webglCompositorRef.current.render({
+              alphaSize: {
+                width,
+                height,
+              },
+              alphaTensor: pha,
+              backend: tf.backend() as TfjsWebGLBackend,
+              coverLayout: snapshotOptions.coverLayout,
+              mirror: snapshotOptions.mirror ?? true,
+              source: pendingSourceCanvas,
+              stageSize: snapshotOptions.stageSize,
+            });
+
+            if (foregroundCanvas) {
+              nextSourceCanvas = foregroundCanvas;
+              nextMaskCanvas = syncOpaqueMaskCanvas(opaqueMaskCanvasRef, snapshotOptions.stageSize);
+              pendingSourceCanvasRef.current = pendingSourceCanvas;
+              pendingSourceCanvas = null;
+              maskCompletedAt = performance.now();
+            }
           }
 
-          const maskCanvas = maskCanvasRef.current;
-          if (maskCanvas.width !== width || maskCanvas.height !== height) {
-            maskCanvas.width = width;
-            maskCanvas.height = height;
+          if (!nextMaskCanvas) {
+            if (!maskCanvasRef.current) {
+              maskCanvasRef.current = document.createElement('canvas');
+            }
+
+            const maskCanvas = maskCanvasRef.current;
+            if (maskCanvas.width !== width || maskCanvas.height !== height) {
+              maskCanvas.width = width;
+              maskCanvas.height = height;
+            }
+
+            maskTensor = tf.tidy(() => {
+              const alpha = pha.squeeze([0]);
+              const white = tf.ones([height, width, 3]);
+              return tf.concat([white, alpha], -1).mul(255).cast('int32') as Tensor3D;
+            });
+
+            await tf.browser.toPixels(maskTensor as Tensor3D, maskCanvas);
+            maskCompletedAt = performance.now();
+            nextMaskCanvas = maskCanvas;
+
+            if (snapshotOptions) {
+              pendingMaskCanvas = pendingMaskCanvasRef.current ?? document.createElement('canvas');
+              const { coverLayout, mirror = true, stageSize } = snapshotOptions;
+              if (
+                pendingMaskCanvas.width !== stageSize.width ||
+                pendingMaskCanvas.height !== stageSize.height
+              ) {
+                pendingMaskCanvas.width = stageSize.width;
+                pendingMaskCanvas.height = stageSize.height;
+              }
+
+              const pendingMaskContext =
+                pendingMaskCanvas.getContext('2d', {
+                  alpha: true,
+                  desynchronized: true,
+                }) ?? pendingMaskCanvas.getContext('2d');
+
+              if (!pendingMaskContext) {
+                throw new Error('Unable to create video matting mask context.');
+              }
+
+              pendingMaskContext.clearRect(0, 0, stageSize.width, stageSize.height);
+              pendingMaskContext.save();
+              if (BACKGROUND_MASK_DRAW_BLUR_PX > 0) {
+                pendingMaskContext.filter = `blur(${BACKGROUND_MASK_DRAW_BLUR_PX}px)`;
+              }
+              if (mirror) {
+                pendingMaskContext.translate(stageSize.width, 0);
+                pendingMaskContext.scale(-1, 1);
+              }
+              pendingMaskContext.drawImage(
+                maskCanvas,
+                coverLayout.offsetX,
+                coverLayout.offsetY,
+                coverLayout.width,
+                coverLayout.height
+              );
+              pendingMaskContext.restore();
+              nextMaskCanvas = pendingMaskCanvas;
+            }
           }
-
-          maskTensor = tf.tidy(() => {
-            const alpha = pha.squeeze([0]);
-            const white = tf.ones([height, width, 3]);
-            return tf.concat([white, alpha], -1).mul(255).cast('int32') as Tensor3D;
-          });
-
-          await tf.browser.toPixels(maskTensor as Tensor3D, maskCanvas);
 
           disposeTensors(tf, [fgr, pha, sourceTensor, ...recurrentStateRef.current]);
           sourceTensor = null;
           recurrentStateRef.current = [r1o, r2o, r3o, r4o];
           outputs = null;
           const completedAt = performance.now();
-          const previousDisplaySourceCanvas = displaySourceCanvasRef.current;
-          displaySourceCanvasRef.current = pendingSourceCanvas;
-          pendingSourceCanvasRef.current = previousDisplaySourceCanvas;
+          if (!nextMaskCanvas) {
+            throw new Error('Video matting did not produce a foreground mask.');
+          }
+
+          if (pendingSourceCanvas) {
+            const previousDisplaySourceCanvas = displaySourceCanvasRef.current;
+            displaySourceCanvasRef.current = pendingSourceCanvas;
+            pendingSourceCanvasRef.current = previousDisplaySourceCanvas;
+          }
+
+          if (pendingMaskCanvas) {
+            const previousDisplayMaskCanvas = displayMaskCanvasRef.current;
+            displayMaskCanvasRef.current = pendingMaskCanvas;
+            pendingMaskCanvasRef.current = previousDisplayMaskCanvas;
+          }
 
           frameRef.current = {
             width,
             height,
-            maskCanvas,
-            sourceCanvas: pendingSourceCanvas,
+            maskCanvas: nextMaskCanvas,
+            sourceCanvas: nextSourceCanvas,
             timestamp: completedAt,
           };
 
@@ -382,6 +568,9 @@ export function useRobustVideoMatting({
             setStats({
               fps: Math.round((nextFrames * 1000) / (completedAt - statsRef.current.lastUpdatedAt)),
               inferenceMs: Math.round(completedAt - startedAt),
+              snapshotMs: Math.round(snapshotCompletedAt - snapshotStartedAt),
+              modelMs: Math.round(modelCompletedAt - modelStartedAt),
+              maskMs: Math.round(completedAt - modelCompletedAt),
               inputWidth: width,
               inputHeight: height,
               backend: tf.getBackend(),

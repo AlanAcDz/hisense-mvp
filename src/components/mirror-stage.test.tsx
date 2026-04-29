@@ -77,6 +77,9 @@ describe('MirrorStage', () => {
     stats: {
       fps: 0,
       inferenceMs: 0,
+      snapshotMs: 0,
+      modelMs: 0,
+      maskMs: 0,
       inputWidth: 0,
       inputHeight: 0,
       backend: null,

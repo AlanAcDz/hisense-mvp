@@ -12,6 +12,7 @@ import {
   drawArmOcclusionMaskLayer,
   drawBackgroundLayer,
   drawForegroundLayer,
+  drawStageForegroundLayer,
   getBackgroundGuidance,
   resolveBackgroundMatte,
   syncMatteCanvas,
@@ -266,6 +267,10 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   }
 
   function updateRenderFps(now: number) {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
     const nextFrames = renderFpsRef.current.frames + 1;
     if (!renderFpsRef.current.lastUpdatedAt) {
       renderFpsRef.current = {
@@ -587,7 +592,10 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       );
       const nextFrame = detectFrame(currentVideo, now, lastDetectAtRef);
       const nextPoseFrame = nextFrame.poseFrame;
-      const nextMattingFrame = detectMattingFrame(currentVideo, now, lastMattingDetectAtRef);
+      const nextMattingFrame = detectMattingFrame(currentVideo, now, lastMattingDetectAtRef, {
+        coverLayout,
+        stageSize,
+      });
       const nextSegmentationFrame = VIDEO_MATTING_ENABLED ? null : nextFrame.segmentationFrame;
       const nextMattingMaskCanvas =
         VIDEO_MATTING_ENABLED &&
@@ -647,13 +655,22 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
 
       if (torsoTransform && foregroundMaskCanvas) {
         drawBackgroundLayer(currentBackgroundContext, stageSize, backgroundVideoRef.current);
-        drawForegroundLayer({
-          ctx: currentForegroundContext,
-          coverLayout,
-          stageSize,
-          source: foregroundSource,
-          maskCanvas: foregroundMaskCanvas,
-        });
+        if (nextMattingSourceCanvas && nextMattingMaskCanvas) {
+          drawStageForegroundLayer({
+            ctx: currentForegroundContext,
+            stageSize,
+            source: nextMattingSourceCanvas,
+            maskCanvas: nextMattingMaskCanvas,
+          });
+        } else {
+          drawForegroundLayer({
+            ctx: currentForegroundContext,
+            coverLayout,
+            stageSize,
+            source: foregroundSource,
+            maskCanvas: foregroundMaskCanvas,
+          });
+        }
         drawArmOcclusionLayer({
           ctx: currentArmOverlayContext,
           coverLayout,
@@ -801,20 +818,27 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         ref={displayCanvasRef}
         className="pointer-events-none absolute inset-0 z-50 h-full w-full"
       />
-      <div
-        className="pointer-events-none absolute left-3 top-3 z-[60] rounded-md border border-white/14 bg-black/58 px-3 py-2 font-mono text-[0.68rem] leading-tight text-white/86 shadow-[0_12px_30px_rgba(0,0,0,0.32)] backdrop-blur-md sm:left-4 sm:top-4"
-        aria-hidden="true">
-        <div>render {renderFps} fps</div>
-        <div>
-          matte {mattingStats.fps} fps
-          {mattingStats.inputWidth && mattingStats.inputHeight
-            ? ` ${mattingStats.inputWidth}x${mattingStats.inputHeight}`
-            : ''}
+      {import.meta.env.DEV ? (
+        <div
+          className="pointer-events-none absolute left-3 top-3 z-[60] rounded-md border border-white/14 bg-black/58 px-3 py-2 font-mono text-[0.68rem] leading-tight text-white/86 shadow-[0_12px_30px_rgba(0,0,0,0.32)] backdrop-blur-md sm:left-4 sm:top-4"
+          aria-hidden="true">
+          <div>render {renderFps} fps</div>
+          <div>
+            matte {mattingStats.fps} fps
+            {mattingStats.inputWidth && mattingStats.inputHeight
+              ? ` ${mattingStats.inputWidth}x${mattingStats.inputHeight}`
+              : ''}
+          </div>
+          <div>{mattingStats.inferenceMs ? `${mattingStats.inferenceMs} ms` : 'warming up'}</div>
+          {mattingStats.modelMs ? (
+            <div>
+              m {mattingStats.modelMs} / s {mattingStats.snapshotMs} / k {mattingStats.maskMs}
+            </div>
+          ) : null}
+          <div>{mattingStats.backend ? `tfjs ${mattingStats.backend}` : 'tfjs loading'}</div>
+          {mattingError ? <div className="max-w-52 truncate text-red-200">{mattingError}</div> : null}
         </div>
-        <div>{mattingStats.inferenceMs ? `${mattingStats.inferenceMs} ms` : 'warming up'}</div>
-        <div>{mattingStats.backend ? `tfjs ${mattingStats.backend}` : 'tfjs loading'}</div>
-        {mattingError ? <div className="max-w-52 truncate text-red-200">{mattingError}</div> : null}
-      </div>
+      ) : null}
     </div>
   );
 });
