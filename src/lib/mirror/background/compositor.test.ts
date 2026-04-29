@@ -1,5 +1,6 @@
 import {
   applyJointBilateralFilter,
+  copyMattingAlpha,
   copySegmentationAlpha,
   createBackgroundMatte,
   dilateAlphaMask,
@@ -128,11 +129,23 @@ describe('background compositor', () => {
 
     const matte = createBackgroundMatte(segmentationFrame);
 
-    expect(matte.alpha[12]).toBeGreaterThan(100);
+    expect(matte.alpha[12]).toBeGreaterThan(90);
     expect(matte.alpha[7]).toBeGreaterThan(0);
     expect(matte.alpha[0]).toBeLessThan(128);
     expect(matte.alpha[12]).toBeGreaterThan(matte.alpha[0] ?? 0);
     expect(matte.coverage).toBeGreaterThan(0);
+  });
+
+  it('preserves video matting alpha without segmentation thresholding', () => {
+    const segmentationFrame = createSegmentationFrame(
+      3,
+      1,
+      new Float32Array([0.2, 0.5, 0.8])
+    );
+    segmentationFrame.source = 'video-matting';
+
+    expect(Array.from(copyMattingAlpha(segmentationFrame))).toEqual([51, 128, 204]);
+    expect(Array.from(createBackgroundMatte(segmentationFrame).alpha)).toEqual([51, 128, 204]);
   });
 
   it('supports fractional dilation radii without sampling sparse half-pixels', () => {

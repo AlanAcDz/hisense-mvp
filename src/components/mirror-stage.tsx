@@ -21,7 +21,16 @@ import {
   downloadDataUrl,
   drawCaptureLayers,
 } from '@/lib/mirror/capture/compose-capture';
-import { BACKGROUND_VIDEO_ASSET_URL } from '@/lib/mirror/constants';
+import {
+  BACKGROUND_VIDEO_ASSET_URL,
+  DEBUG_FPS_UPDATE_INTERVAL_MS,
+  VIDEO_MATTING_ENABLED,
+  VIDEO_MATTING_STALE_MS,
+} from '@/lib/mirror/constants';
+import {
+  useRobustVideoMatting,
+  type RobustVideoMattingOptions,
+} from '@/lib/mirror/matting/use-robust-video-matting';
 import { drawPoseOverlay } from '@/lib/mirror/pose/drawing';
 import { computeRigPose, computeTorsoTransform, getCoverLayout } from '@/lib/mirror/pose/torso';
 import {
@@ -62,6 +71,10 @@ export interface MirrorStageProps {
   usePoseLandmarkerRuntime?: (options?: PoseLandmarkerOptions) => Pick<
     ReturnType<typeof usePoseLandmarker>,
     'detectFrame' | 'error' | 'isLoading'
+  >;
+  useVideoMattingRuntime?: (options?: RobustVideoMattingOptions) => Pick<
+    ReturnType<typeof useRobustVideoMatting>,
+    'detectMattingFrame' | 'error' | 'isLoading' | 'stats'
   >;
 }
 
@@ -118,7 +131,9 @@ function getMaxCameraConstraint(
     return { ideal: preferredValue };
   }
 
-  return exact ? { exact: range.max } : { ideal: range.max };
+  const targetValue = Math.min(range.max, preferredValue);
+
+  return exact ? { exact: targetValue } : { ideal: targetValue };
 }
 
 async function requestMaximumCameraResolution(stream: MediaStream) {
@@ -156,6 +171,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
     onSubjectDetectedChange,
     createSceneController = DEFAULT_CREATE_SCENE_CONTROLLER,
     usePoseLandmarkerRuntime = usePoseLandmarker,
+    useVideoMattingRuntime = useRobustVideoMatting,
   },
   ref
 ) {
@@ -172,6 +188,8 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   const animationFrameRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const lastDetectAtRef = useRef(0);
+  const lastMattingDetectAtRef = useRef(0);
+  const renderFpsRef = useRef({ frames: 0, lastUpdatedAt: 0 });
   const subjectDetectedRef = useRef(false);
   const sceneControllerRef = useRef<ShirtSceneControllerRuntime | null>(null);
   const backgroundVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -187,15 +205,33 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
     backgroundMode: 'loading',
     backgroundGuidance: null,
   });
+  const [renderFps, setRenderFps] = useState(0);
 
+  const effectivePoseLandmarkerOptions = useMemo(
+    () => ({
+      ...poseLandmarkerOptions,
+      outputSegmentationMasks: !VIDEO_MATTING_ENABLED,
+    }),
+    [poseLandmarkerOptions]
+  );
   const { detectFrame, error: poseError, isLoading: poseModelLoading } =
-    usePoseLandmarkerRuntime(poseLandmarkerOptions);
+    usePoseLandmarkerRuntime(effectivePoseLandmarkerOptions);
+  const {
+    detectMattingFrame,
+    error: mattingError,
+    isLoading: mattingModelLoading,
+    stats: mattingStats,
+  } = useVideoMattingRuntime({
+    enabled: VIDEO_MATTING_ENABLED,
+  });
   const stageSize = useStageSize(stageRef);
   const statusMessage = useMemo(
     () =>
       sceneState.cameraError ??
       (poseModelLoading ? 'Loading pose model...' : null) ??
       poseError ??
+      (mattingModelLoading ? 'Loading video matting model...' : null) ??
+      mattingError ??
       sceneState.poseError ??
       (sceneState.shirtAssetLoading ? 'Loading jersey assets...' : null) ??
       sceneState.shirtAssetError ??
@@ -203,6 +239,8 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       (sceneState.backgroundMode === 'paused' ? sceneState.backgroundGuidance : null) ??
       null,
     [
+      mattingError,
+      mattingModelLoading,
       poseError,
       poseModelLoading,
       sceneState.backgroundMode,
@@ -225,6 +263,30 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
 
     subjectDetectedRef.current = detected;
     onSubjectDetectedChange?.(detected);
+  }
+
+  function updateRenderFps(now: number) {
+    const nextFrames = renderFpsRef.current.frames + 1;
+    if (!renderFpsRef.current.lastUpdatedAt) {
+      renderFpsRef.current = {
+        frames: nextFrames,
+        lastUpdatedAt: now,
+      };
+      return;
+    }
+
+    if (now - renderFpsRef.current.lastUpdatedAt < DEBUG_FPS_UPDATE_INTERVAL_MS) {
+      renderFpsRef.current.frames = nextFrames;
+      return;
+    }
+
+    setRenderFps(
+      Math.round((nextFrames * 1000) / (now - renderFpsRef.current.lastUpdatedAt))
+    );
+    renderFpsRef.current = {
+      frames: 0,
+      lastUpdatedAt: now,
+    };
   }
 
   useEffect(
@@ -437,6 +499,8 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
     }
 
     const renderFrame = (now: number) => {
+      updateRenderFps(now);
+
       const currentVideo = videoRef.current;
       const currentController = sceneControllerRef.current;
       const currentBackgroundCanvas = backgroundCanvasRef.current;
@@ -523,7 +587,20 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       );
       const nextFrame = detectFrame(currentVideo, now, lastDetectAtRef);
       const nextPoseFrame = nextFrame.poseFrame;
-      const nextSegmentationFrame = nextFrame.segmentationFrame;
+      const nextMattingFrame = detectMattingFrame(currentVideo, now, lastMattingDetectAtRef);
+      const nextSegmentationFrame = VIDEO_MATTING_ENABLED ? null : nextFrame.segmentationFrame;
+      const nextMattingMaskCanvas =
+        VIDEO_MATTING_ENABLED &&
+        nextMattingFrame &&
+        now - nextMattingFrame.timestamp <= VIDEO_MATTING_STALE_MS
+          ? nextMattingFrame.maskCanvas
+          : null;
+      const nextMattingSourceCanvas =
+        VIDEO_MATTING_ENABLED &&
+        nextMattingFrame &&
+        now - nextMattingFrame.timestamp <= VIDEO_MATTING_STALE_MS
+          ? nextMattingFrame.sourceCanvas
+          : null;
 
       drawPoseOverlay(currentPoseContext, nextPoseFrame, stageSize, coverLayout, showPosePoints);
 
@@ -534,14 +611,21 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         computeRigPose(nextPoseFrame, torsoTransform, stageSize, coverLayout)
       );
 
-      const backgroundMatte = resolveBackgroundMatte({
-        segmentationFrame: nextSegmentationFrame,
-        previousMatte: lastGoodMatteRef.current,
-        now,
-      });
+      const backgroundMatte = VIDEO_MATTING_ENABLED
+        ? {
+            matte: null,
+            reusedPrevious: false,
+          }
+        : resolveBackgroundMatte({
+            segmentationFrame: nextSegmentationFrame,
+            previousMatte: lastGoodMatteRef.current,
+            now,
+          });
       const nextMatte = backgroundMatte.matte;
+      let foregroundMaskCanvas = nextMattingMaskCanvas;
+      let foregroundSource: CanvasImageSource = nextMattingSourceCanvas ?? currentVideo;
 
-      if (torsoTransform && nextMatte) {
+      if (!foregroundMaskCanvas && nextMatte) {
         lastGoodMatteRef.current = nextMatte;
 
         if (!matteCanvasRef.current) {
@@ -557,13 +641,18 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
           syncedMatteTimestampRef.current = nextMatte.timestamp;
         }
 
+        foregroundMaskCanvas = matteCanvasRef.current;
+        foregroundSource = currentVideo;
+      }
+
+      if (torsoTransform && foregroundMaskCanvas) {
         drawBackgroundLayer(currentBackgroundContext, stageSize, backgroundVideoRef.current);
         drawForegroundLayer({
           ctx: currentForegroundContext,
           coverLayout,
           stageSize,
-          source: currentVideo,
-          maskCanvas: matteCanvasRef.current,
+          source: foregroundSource,
+          maskCanvas: foregroundMaskCanvas,
         });
         drawArmOcclusionLayer({
           ctx: currentArmOverlayContext,
@@ -604,7 +693,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
 
         const guidance = getBackgroundGuidance(
           Boolean(torsoTransform),
-          Boolean(nextSegmentationFrame),
+          Boolean(nextMattingMaskCanvas || nextSegmentationFrame),
           backgroundMatte.reusedPrevious
         );
 
@@ -643,7 +732,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         animationFrameRef.current = null;
       }
     };
-  }, [detectFrame, onSubjectDetectedChange, showPosePoints, stageSize]);
+  }, [detectFrame, detectMattingFrame, onSubjectDetectedChange, showPosePoints, stageSize]);
 
   useImperativeHandle(
     ref,
@@ -712,6 +801,20 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         ref={displayCanvasRef}
         className="pointer-events-none absolute inset-0 z-50 h-full w-full"
       />
+      <div
+        className="pointer-events-none absolute left-3 top-3 z-[60] rounded-md border border-white/14 bg-black/58 px-3 py-2 font-mono text-[0.68rem] leading-tight text-white/86 shadow-[0_12px_30px_rgba(0,0,0,0.32)] backdrop-blur-md sm:left-4 sm:top-4"
+        aria-hidden="true">
+        <div>render {renderFps} fps</div>
+        <div>
+          matte {mattingStats.fps} fps
+          {mattingStats.inputWidth && mattingStats.inputHeight
+            ? ` ${mattingStats.inputWidth}x${mattingStats.inputHeight}`
+            : ''}
+        </div>
+        <div>{mattingStats.inferenceMs ? `${mattingStats.inferenceMs} ms` : 'warming up'}</div>
+        <div>{mattingStats.backend ? `tfjs ${mattingStats.backend}` : 'tfjs loading'}</div>
+        {mattingError ? <div className="max-w-52 truncate text-red-200">{mattingError}</div> : null}
+      </div>
     </div>
   );
 });

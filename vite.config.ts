@@ -28,7 +28,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         navigateFallback: 'index.html',
         maximumFileSizeToCacheInBytes: 35 * 1024 * 1024,
-        globPatterns: ['**/*.{html,js,css,png,jpg,jpeg,svg,ico,webmanifest,woff2,glb,wasm,task}'],
+        globPatterns: ['**/*.{html,js,css,png,jpg,jpeg,svg,ico,webmanifest,woff2,glb,wasm,task,json,bin}'],
         globIgnores: [
           '**/.DS_Store',
           '**/README.md',

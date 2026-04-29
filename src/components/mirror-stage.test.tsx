@@ -70,6 +70,18 @@ describe('MirrorStage', () => {
     updateRigPose: vi.fn(),
     updateShirtTransform: vi.fn(),
   };
+  const videoMattingRuntime = () => ({
+    detectMattingFrame: () => null,
+    error: null,
+    isLoading: false,
+    stats: {
+      fps: 0,
+      inferenceMs: 0,
+      inputWidth: 0,
+      inputHeight: 0,
+      backend: null,
+    },
+  });
   let queuedFrames: FrameRequestCallback[] = [];
 
   beforeAll(() => {
@@ -218,6 +230,7 @@ describe('MirrorStage', () => {
           error: null,
           isLoading: false,
         })}
+        useVideoMattingRuntime={videoMattingRuntime}
       />
     );
 
@@ -269,6 +282,7 @@ describe('MirrorStage', () => {
           error: null,
           isLoading: false,
         })}
+        useVideoMattingRuntime={videoMattingRuntime}
       />
     );
 
@@ -309,6 +323,7 @@ describe('MirrorStage', () => {
           error: null,
           isLoading: false,
         })}
+        useVideoMattingRuntime={videoMattingRuntime}
       />
     );
 
@@ -356,6 +371,7 @@ describe('MirrorStage', () => {
           error: null,
           isLoading: false,
         })}
+        useVideoMattingRuntime={videoMattingRuntime}
       />
     );
 

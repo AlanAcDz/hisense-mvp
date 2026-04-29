@@ -50,6 +50,7 @@ export interface SegmentationFrame {
   height: number;
   alpha: Float32Array;
   guideRgba?: Uint8ClampedArray;
+  source?: 'segmentation' | 'video-matting';
   timestamp: number;
 }
 

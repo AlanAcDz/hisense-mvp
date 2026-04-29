@@ -24,6 +24,7 @@ let poseLandmarkerPromise: Promise<PoseLandmarker> | null = null;
 let poseLandmarkerInstance: PoseLandmarker | null = null;
 let poseLandmarkerDelegate: 'CPU' | 'GPU' | null = null;
 let poseLandmarkerModelVariant: PoseModelVariant | null = null;
+let poseLandmarkerOutputSegmentationMasks: boolean | null = null;
 let poseLandmarkerLoadId = 0;
 let gpuDelegateCanvas: HTMLCanvasElement | OffscreenCanvas | null = null;
 
@@ -33,6 +34,7 @@ const GPU_SEGMENTATION_EMPTY_MAX_CONFIDENCE = 0.001;
 export interface PoseLandmarkerOptions {
   modelVariant?: PoseModelVariant;
   inputLongEdgePx?: DetectionInputLongEdgePx;
+  outputSegmentationMasks?: boolean;
 }
 
 function getGpuDelegateCanvas() {
@@ -53,7 +55,11 @@ function getGpuDelegateCanvas() {
   return null;
 }
 
-async function createPoseLandmarker(delegate: 'CPU' | 'GPU', modelVariant: PoseModelVariant) {
+async function createPoseLandmarker(
+  delegate: 'CPU' | 'GPU',
+  modelVariant: PoseModelVariant,
+  outputSegmentationMasks: boolean
+) {
   const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
   const delegateCanvas = delegate === 'GPU' ? getGpuDelegateCanvas() : null;
 
@@ -65,7 +71,7 @@ async function createPoseLandmarker(delegate: 'CPU' | 'GPU', modelVariant: PoseM
     ...(delegateCanvas ? { canvas: delegateCanvas } : {}),
     runningMode: 'VIDEO',
     numPoses: 1,
-    outputSegmentationMasks: true,
+    outputSegmentationMasks,
     ...POSE_CONFIDENCE,
   });
 }
@@ -77,12 +83,21 @@ function disposePoseLandmarker() {
   poseLandmarkerPromise = null;
   poseLandmarkerDelegate = null;
   poseLandmarkerModelVariant = null;
+  poseLandmarkerOutputSegmentationMasks = null;
 }
 
-async function replacePoseLandmarker(delegate: 'CPU' | 'GPU', modelVariant: PoseModelVariant) {
+async function replacePoseLandmarker(
+  delegate: 'CPU' | 'GPU',
+  modelVariant: PoseModelVariant,
+  outputSegmentationMasks: boolean
+) {
   disposePoseLandmarker();
   const loadId = poseLandmarkerLoadId;
-  const nextPoseLandmarker = await createPoseLandmarker(delegate, modelVariant);
+  const nextPoseLandmarker = await createPoseLandmarker(
+    delegate,
+    modelVariant,
+    outputSegmentationMasks
+  );
   if (loadId !== poseLandmarkerLoadId) {
     nextPoseLandmarker.close();
     throw new Error('Pose model load was superseded.');
@@ -91,15 +106,23 @@ async function replacePoseLandmarker(delegate: 'CPU' | 'GPU', modelVariant: Pose
   poseLandmarkerInstance = nextPoseLandmarker;
   poseLandmarkerDelegate = delegate;
   poseLandmarkerModelVariant = modelVariant;
+  poseLandmarkerOutputSegmentationMasks = outputSegmentationMasks;
   return poseLandmarkerInstance;
 }
 
-async function loadPoseLandmarker(modelVariant: PoseModelVariant) {
-  if (poseLandmarkerInstance && poseLandmarkerModelVariant === modelVariant) {
+async function loadPoseLandmarker(modelVariant: PoseModelVariant, outputSegmentationMasks: boolean) {
+  if (
+    poseLandmarkerInstance &&
+    poseLandmarkerModelVariant === modelVariant &&
+    poseLandmarkerOutputSegmentationMasks === outputSegmentationMasks
+  ) {
     return poseLandmarkerInstance;
   }
 
-  if (poseLandmarkerModelVariant !== modelVariant) {
+  if (
+    poseLandmarkerModelVariant !== modelVariant ||
+    poseLandmarkerOutputSegmentationMasks !== outputSegmentationMasks
+  ) {
     disposePoseLandmarker();
   }
 
@@ -117,19 +140,26 @@ async function loadPoseLandmarker(modelVariant: PoseModelVariant) {
       poseLandmarkerInstance = landmarker;
       poseLandmarkerDelegate = delegate;
       poseLandmarkerModelVariant = modelVariant;
+      poseLandmarkerOutputSegmentationMasks = outputSegmentationMasks;
       return poseLandmarkerInstance;
     };
 
     poseLandmarkerPromise = (async () => {
       if (POSE_USE_GPU_DELEGATE) {
         try {
-          return applyPoseLandmarker(await createPoseLandmarker('GPU', modelVariant), 'GPU');
+          return applyPoseLandmarker(
+            await createPoseLandmarker('GPU', modelVariant, outputSegmentationMasks),
+            'GPU'
+          );
         } catch {
           gpuDelegateCanvas = null;
         }
       }
 
-      return applyPoseLandmarker(await createPoseLandmarker('CPU', modelVariant), 'CPU');
+      return applyPoseLandmarker(
+        await createPoseLandmarker('CPU', modelVariant, outputSegmentationMasks),
+        'CPU'
+      );
     })().catch((error) => {
       if (loadId === poseLandmarkerLoadId) {
         disposePoseLandmarker();
@@ -218,6 +248,7 @@ function getDetectionScale(videoWidth: number, videoHeight: number, inputLongEdg
 export function usePoseLandmarker({
   modelVariant = POSE_MODEL_VARIANT,
   inputLongEdgePx = DETECTION_INPUT_LONG_EDGE_PX,
+  outputSegmentationMasks = true,
 }: PoseLandmarkerOptions = {}) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -238,7 +269,7 @@ export function usePoseLandmarker({
       setError(null);
 
       try {
-        await loadPoseLandmarker(modelVariant);
+        await loadPoseLandmarker(modelVariant, outputSegmentationMasks);
         if (!cancelled) {
           setIsLoading(false);
         }
@@ -255,7 +286,7 @@ export function usePoseLandmarker({
     return () => {
       cancelled = true;
     };
-  }, [modelVariant]);
+  }, [modelVariant, outputSegmentationMasks]);
 
   const fallbackToCpuDelegate = useCallback(() => {
     if (fallbackInFlightRef.current || poseLandmarkerDelegate !== 'GPU') {
@@ -266,7 +297,7 @@ export function usePoseLandmarker({
     setIsLoading(true);
     setError(null);
 
-    void replacePoseLandmarker('CPU', modelVariant)
+    void replacePoseLandmarker('CPU', modelVariant, outputSegmentationMasks)
       .then(() => {
         gpuSegmentationFailureCountRef.current = 0;
         setError(null);
@@ -278,7 +309,7 @@ export function usePoseLandmarker({
         fallbackInFlightRef.current = false;
         setIsLoading(false);
       });
-  }, [modelVariant]);
+  }, [modelVariant, outputSegmentationMasks]);
 
   const detectFrame = useCallback(
     (

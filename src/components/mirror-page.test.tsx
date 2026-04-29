@@ -86,7 +86,11 @@ describe('MirrorPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /mostrar configuración/i }));
 
     expect(screen.getByRole('button', { name: /mostrar controles completos/i })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /laboratorio de calibración/i })).not.toBeInTheDocument();
+    if (import.meta.env.DEV) {
+      expect(screen.getByRole('link', { name: /laboratorio de calibración/i })).toBeInTheDocument();
+    } else {
+      expect(screen.queryByRole('link', { name: /laboratorio de calibración/i })).not.toBeInTheDocument();
+    }
     expect(screen.getByRole('button', { name: /capturar/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /mostrar puntos de pose/i })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /modelo/i })).toHaveValue(POSE_MODEL_VARIANT);

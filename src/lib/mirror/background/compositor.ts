@@ -83,10 +83,10 @@ interface JointBilateralFilterOptions {
 
 const ARM_OCCLUSION_MIN_LENGTH_PX = 8;
 const ARM_OCCLUSION_MIN_WIDTH_PX = 22;
-const ARM_OCCLUSION_MAX_WIDTH_RATIO = 0.095;
-const ARM_OCCLUSION_FOREARM_WIDTH_RATIO = 0.34;
-const ARM_OCCLUSION_HAND_WIDTH_RATIO = 1.15;
-const ARM_OCCLUSION_HAND_RADIUS_RATIO = 0.55;
+const ARM_OCCLUSION_MAX_WIDTH_RATIO = 0.075;
+const ARM_OCCLUSION_FOREARM_WIDTH_RATIO = 0.26;
+const ARM_OCCLUSION_HAND_WIDTH_RATIO = 0.9;
+const ARM_OCCLUSION_HAND_RADIUS_RATIO = 0.4;
 
 const colorWeightCache = new Map<number, Float32Array>();
 
@@ -211,27 +211,12 @@ function drawArmOcclusionMask(
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(segment.wrist.x, segment.wrist.y, forearmWidth * 0.55, 0, Math.PI * 2);
+    ctx.arc(segment.wrist.x, segment.wrist.y, forearmWidth * 0.35, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.lineCap = 'round';
     ctx.lineWidth = handWidth;
     if (segment.handPoints.length > 0) {
-      ctx.beginPath();
-      ctx.moveTo(segment.wrist.x, segment.wrist.y);
-      segment.handPoints
-        .slice()
-        .sort((first, second) => {
-          const firstAngle = Math.atan2(first.y - handCenter.y, first.x - handCenter.x);
-          const secondAngle = Math.atan2(second.y - handCenter.y, second.x - handCenter.x);
-          return firstAngle - secondAngle;
-        })
-        .forEach((handPoint) => {
-          ctx.lineTo(handPoint.x, handPoint.y);
-        });
-      ctx.closePath();
-      ctx.fill();
-
       ctx.beginPath();
       ctx.moveTo(segment.wrist.x, segment.wrist.y);
       ctx.lineTo(handCenter.x, handCenter.y);
@@ -430,6 +415,16 @@ export function copySegmentationAlpha(
         ? Math.max(curvedAlpha, previousAlpha?.[index] ?? 0)
         : curvedAlpha
     );
+  }
+
+  return alpha;
+}
+
+export function copyMattingAlpha(segmentationFrame: SegmentationFrame) {
+  const alpha = new Uint8ClampedArray(segmentationFrame.alpha.length);
+
+  for (let index = 0; index < segmentationFrame.alpha.length; index += 1) {
+    alpha[index] = Math.round(clamp01(segmentationFrame.alpha[index] ?? 0) * 255);
   }
 
   return alpha;
@@ -637,6 +632,18 @@ export function createBackgroundMatte(
   segmentationFrame: SegmentationFrame,
   previousMatte?: BackgroundMatte | null
 ): BackgroundMatte {
+  if (segmentationFrame.source === 'video-matting') {
+    const alpha = copyMattingAlpha(segmentationFrame);
+
+    return {
+      width: segmentationFrame.width,
+      height: segmentationFrame.height,
+      alpha,
+      coverage: computeMaskCoverage(alpha),
+      timestamp: segmentationFrame.timestamp,
+    };
+  }
+
   const segmentationAlpha =
     BACKGROUND_MASK_JOINT_BILATERAL_ENABLED
       ? applyJointBilateralFilter(
