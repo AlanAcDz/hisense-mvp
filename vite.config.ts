@@ -32,7 +32,6 @@ export default defineConfig({
         globIgnores: [
           '**/.DS_Store',
           '**/README.md',
-          '**/jersey_mexico_rig.glb',
           '**/hisense-football-stadium-2026.jpg',
         ],
         runtimeCaching: [
@@ -42,8 +41,27 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'background-videos',
+              rangeRequests: true,
+              cacheableResponse: {
+                statuses: [200],
+              },
               expiration: {
-                maxEntries: 3,
+                maxEntries: 8,
+                maxAgeSeconds: 30 * 24 * 60 * 60,
+              },
+            },
+          },
+          {
+            urlPattern: ({ url }) =>
+              url.pathname.includes('/assets/models/') && url.pathname.endsWith('.glb'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'models-glb',
+              cacheableResponse: {
+                statuses: [200],
+              },
+              expiration: {
+                maxEntries: 8,
                 maxAgeSeconds: 30 * 24 * 60 * 60,
               },
             },
