@@ -40,7 +40,7 @@ export const DETECTION_INPUT_LONG_EDGE_OPTIONS = [256, 512, 768, 1024, 1280, 153
 export type DetectionInputLongEdgePx = (typeof DETECTION_INPUT_LONG_EDGE_OPTIONS)[number]
 export const POSE_MODEL_VARIANTS = ['full', 'lite', 'heavy'] as const
 export type PoseModelVariant = (typeof POSE_MODEL_VARIANTS)[number]
-export const POSE_MODEL_VARIANT: PoseModelVariant = 'full'
+export const POSE_MODEL_VARIANT: PoseModelVariant = 'lite'
 export const POSE_MODEL_URLS = {
   full: withBaseUrl('/assets/mediapipe/models/pose_landmarker_full.task'),
   lite: withBaseUrl('/assets/mediapipe/models/pose_landmarker_lite.task'),
