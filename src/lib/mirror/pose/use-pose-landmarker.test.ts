@@ -2,6 +2,7 @@ import {
   MEDIAPIPE_WASM_URL,
   POSE_MODEL_URL,
   POSE_MODEL_URLS,
+  POSE_MODEL_VARIANT,
   getPoseModelUrl,
 } from '@/lib/mirror/constants';
 import { isSegmentationFrameLikelyEmpty } from '@/lib/mirror/pose/use-pose-landmarker';
@@ -19,7 +20,9 @@ function createSegmentationFrame(values: number[], timestamp = 1000): Segmentati
 describe('usePoseLandmarker segmentation health', () => {
   it('uses vendored local MediaPipe runtime assets', () => {
     expect(MEDIAPIPE_WASM_URL).toMatch(/assets\/mediapipe\/wasm$/);
-    expect(POSE_MODEL_URL).toMatch(/assets\/mediapipe\/models\/pose_landmarker_full\.task$/);
+    expect(POSE_MODEL_URL).toBe(POSE_MODEL_URLS[POSE_MODEL_VARIANT]);
+    expect(getPoseModelUrl()).toBe(POSE_MODEL_URLS[POSE_MODEL_VARIANT]);
+    expect(POSE_MODEL_URLS.full).toMatch(/assets\/mediapipe\/models\/pose_landmarker_full\.task$/);
     expect(POSE_MODEL_URLS.lite).toMatch(/assets\/mediapipe\/models\/pose_landmarker_lite\.task$/);
     expect(POSE_MODEL_URLS.heavy).toMatch(/assets\/mediapipe\/models\/pose_landmarker_heavy\.task$/);
     expect(getPoseModelUrl('lite')).toBe(POSE_MODEL_URLS.lite);

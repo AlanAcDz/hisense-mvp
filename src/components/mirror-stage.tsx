@@ -57,6 +57,9 @@ const DEFAULT_CREATE_SCENE_CONTROLLER = () => new ShirtSceneController();
 const PREFERRED_CAMERA_WIDTH_PX = 3840;
 const PREFERRED_CAMERA_HEIGHT_PX = 2160;
 const PREFERRED_CAMERA_FRAME_RATE = 30;
+const BACKGROUND_VIDEO_LOOP_GUARD_SECONDS = 1 / 24;
+const BACKGROUND_VIDEO_LOOP_START_SECONDS = 0.001;
+const BACKGROUND_VIDEO_LOOP_HOLD_MS = 40;
 
 export interface MirrorStageHandle {
   capture: () => void;
@@ -121,6 +124,40 @@ function clearCanvas(canvas: HTMLCanvasElement | null, stageSize: StageSize) {
   }
 
   ctx.clearRect(0, 0, stageSize.width, stageSize.height);
+}
+
+function canDrawBackgroundVideoFrame(
+  video: HTMLVideoElement | null,
+  now: number,
+  holdUntilRef: { current: number }
+) {
+  if (!video) {
+    return false;
+  }
+
+  if (now < holdUntilRef.current || video.seeking) {
+    return false;
+  }
+
+  if (!Number.isFinite(video.duration) || video.duration <= 0) {
+    return true;
+  }
+
+  if (video.duration - video.currentTime > BACKGROUND_VIDEO_LOOP_GUARD_SECONDS) {
+    return true;
+  }
+
+  try {
+    video.currentTime = BACKGROUND_VIDEO_LOOP_START_SECONDS;
+    holdUntilRef.current = now + BACKGROUND_VIDEO_LOOP_HOLD_MS;
+    if (video.paused) {
+      void video.play();
+    }
+  } catch {
+    // Some browsers can reject seeks while media metadata is settling.
+  }
+
+  return false;
 }
 
 function getMaxCameraConstraint(
@@ -194,6 +231,8 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   const subjectDetectedRef = useRef(false);
   const sceneControllerRef = useRef<ShirtSceneControllerRuntime | null>(null);
   const backgroundVideoRef = useRef<HTMLVideoElement | null>(null);
+  const hasBackgroundVideoFrameRef = useRef(false);
+  const backgroundVideoHoldUntilRef = useRef(0);
   const matteCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const syncedMatteTimestampRef = useRef<number | null>(null);
   const lastGoodMatteRef = useRef<ReturnType<typeof resolveBackgroundMatte>['matte']>(null);
@@ -304,7 +343,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   useEffect(() => {
     const backgroundVideo = document.createElement('video');
     backgroundVideo.src = BACKGROUND_VIDEO_ASSET_URL;
-    backgroundVideo.loop = true;
+    backgroundVideo.loop = false;
     backgroundVideo.muted = true;
     backgroundVideo.playsInline = true;
     backgroundVideo.preload = 'auto';
@@ -317,6 +356,8 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
 
     return () => {
       backgroundVideoRef.current = null;
+      hasBackgroundVideoFrameRef.current = false;
+      backgroundVideoHoldUntilRef.current = 0;
     };
   }, []);
 
@@ -654,7 +695,19 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       }
 
       if (torsoTransform && foregroundMaskCanvas) {
-        drawBackgroundLayer(currentBackgroundContext, stageSize, backgroundVideoRef.current);
+        if (
+          canDrawBackgroundVideoFrame(
+            backgroundVideoRef.current,
+            now,
+            backgroundVideoHoldUntilRef
+          )
+        ) {
+          drawBackgroundLayer(currentBackgroundContext, stageSize, backgroundVideoRef.current);
+          hasBackgroundVideoFrameRef.current = true;
+        } else if (!hasBackgroundVideoFrameRef.current) {
+          drawBackgroundLayer(currentBackgroundContext, stageSize, null);
+        }
+
         if (nextMattingSourceCanvas && nextMattingMaskCanvas) {
           drawStageForegroundLayer({
             ctx: currentForegroundContext,
