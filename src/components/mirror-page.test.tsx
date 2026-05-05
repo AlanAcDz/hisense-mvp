@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle } from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MirrorPage } from '@/components/mirror-page';
 import type { MirrorStageHandle, MirrorStageProps } from '@/components/mirror-stage';
 import {
@@ -11,6 +11,8 @@ import {
 describe('MirrorPage', () => {
   afterEach(() => {
     vi.useRealTimers();
+    cleanup();
+    window.localStorage.clear();
   });
 
   function queryScreensaverVideo() {
@@ -68,6 +70,44 @@ describe('MirrorPage', () => {
     expect(
       screen.queryByText(/Colócate frente a la pantalla para comenzar la experiencia/i)
     ).not.toBeInTheDocument();
+  });
+
+  it('counts subject detections and persists them in local storage', () => {
+    let notifySubjectDetected: MirrorStageProps['onSubjectDetectedChange'];
+    const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(
+      { onSubjectDetectedChange },
+      ref
+    ) {
+      useImperativeHandle(ref, () => ({
+        capture() {},
+      }));
+      notifySubjectDetected = onSubjectDetectedChange;
+
+      return <div data-testid="mirror-stage" />;
+    });
+
+    const { unmount } = render(<MirrorPage StageComponent={FakeStage} />);
+
+    expect(screen.getByText('Detecciones')).toBeInTheDocument();
+    expect(screen.getByText('0')).toBeInTheDocument();
+
+    act(() => {
+      notifySubjectDetected?.(true);
+    });
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(window.localStorage.getItem('hisense-mvp:subject-detection-count')).toBe('1');
+
+    act(() => {
+      notifySubjectDetected?.(false);
+      notifySubjectDetected?.(true);
+    });
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(window.localStorage.getItem('hisense-mvp:subject-detection-count')).toBe('2');
+
+    unmount();
+    render(<MirrorPage StageComponent={FakeStage} />);
+
+    expect(screen.getByText('2')).toBeInTheDocument();
   });
 
   it('reveals the right-side controls from the hidden lip', () => {

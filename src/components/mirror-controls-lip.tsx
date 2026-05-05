@@ -12,6 +12,7 @@ type ControlsVisibility = 'hidden' | 'preview' | 'open'
 
 interface MirrorControlsLipProps {
   showPosePoints: boolean
+  subjectDetectionCount: number
   poseModelVariant: PoseModelVariant
   detectionInputLongEdgePx: DetectionInputLongEdgePx
   onCapture: () => void
@@ -28,6 +29,7 @@ const POSE_MODEL_LABELS: Record<PoseModelVariant, string> = {
 
 export function MirrorControlsLip({
   showPosePoints,
+  subjectDetectionCount,
   poseModelVariant,
   detectionInputLongEdgePx,
   onCapture,
@@ -147,6 +149,15 @@ export function MirrorControlsLip({
                 Laboratorio de calibración
               </a>
             ) : null}
+
+            <div className="rounded-2xl border border-cyan-200/18 bg-cyan-300/10 px-4 py-3 text-white">
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-cyan-100/68">
+                Detecciones
+              </p>
+              <p className="mt-1 text-3xl font-bold tabular-nums text-white">
+                {subjectDetectionCount.toLocaleString('es-MX')}
+              </p>
+            </div>
 
             <div className="flex flex-col gap-3">
               <label className="flex flex-col gap-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-white/62">
