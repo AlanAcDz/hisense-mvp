@@ -210,7 +210,7 @@ export function MirrorControlsLip({
                   className="h-11 rounded-full border border-white/14 bg-white/7 px-4 text-sm font-semibold normal-case tracking-normal text-white/92 outline-none transition hover:border-cyan-200/40 hover:bg-cyan-300/10 focus:border-cyan-200/60 focus:bg-cyan-300/10">
                   {SCREENSAVER_OPTIONS.map((option) => (
                     <option key={option} value={option}>
-                      Screensaver {option}
+                      Screensaver {option === 1 ? 'Derecha' : 'Izquierda'}
                     </option>
                   ))}
                 </select>
