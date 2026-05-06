@@ -3,9 +3,10 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MirrorPage } from '@/components/mirror-page';
 import type { MirrorStageHandle, MirrorStageProps } from '@/components/mirror-stage';
 import {
+  DEFAULT_SCREENSAVER_OPTION,
   DETECTION_INPUT_LONG_EDGE_PX,
+  getScreensaverVideoUrl,
   POSE_MODEL_VARIANT,
-  SCREENSAVER_VIDEO_ASSET_URL,
 } from '@/lib/mirror/constants';
 
 describe('MirrorPage', () => {
@@ -17,7 +18,7 @@ describe('MirrorPage', () => {
 
   function queryScreensaverVideo() {
     return document.querySelector<HTMLVideoElement>(
-      `video[src="${SCREENSAVER_VIDEO_ASSET_URL}"]`
+      `video[src="${getScreensaverVideoUrl(DEFAULT_SCREENSAVER_OPTION)}"]`
     );
   }
 

@@ -6,7 +6,13 @@ function withBaseUrl(path: string) {
 
 export const JERSEY_RIGGED_MODEL_URL = withBaseUrl('/assets/models/jersey_mexico_rig.glb')
 export const BACKGROUND_VIDEO_ASSET_URL = withBaseUrl('/assets/backgrounds/background.mp4')
-export const SCREENSAVER_VIDEO_ASSET_URL = withBaseUrl('/assets/backgrounds/screensaver.mp4')
+export const SCREENSAVER_OPTIONS = [1, 2] as const
+export type ScreensaverOption = (typeof SCREENSAVER_OPTIONS)[number]
+export const DEFAULT_SCREENSAVER_OPTION: ScreensaverOption = 1
+
+export function getScreensaverVideoUrl(option: ScreensaverOption = DEFAULT_SCREENSAVER_OPTION) {
+  return withBaseUrl(`/assets/backgrounds/screensaver-${option}.mp4`)
+}
 export const MEDIAPIPE_WASM_URL = withBaseUrl('/assets/mediapipe/wasm')
 export const LANDMARK_INDICES = {
   leftShoulder: 11,

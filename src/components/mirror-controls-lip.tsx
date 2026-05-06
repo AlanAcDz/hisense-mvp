@@ -4,6 +4,8 @@ import {
   type DetectionInputLongEdgePx,
   POSE_MODEL_VARIANTS,
   type PoseModelVariant,
+  SCREENSAVER_OPTIONS,
+  type ScreensaverOption,
 } from '@/lib/mirror/constants'
 
 const CONTROLS_AUTO_HIDE_MS = 15_000
@@ -15,10 +17,12 @@ interface MirrorControlsLipProps {
   subjectDetectionCount: number
   poseModelVariant: PoseModelVariant
   detectionInputLongEdgePx: DetectionInputLongEdgePx
+  screensaverOption: ScreensaverOption
   onCapture: () => void
   onTogglePosePoints: () => void
   onPoseModelVariantChange: (variant: PoseModelVariant) => void
   onDetectionInputLongEdgePxChange: (longEdgePx: DetectionInputLongEdgePx) => void
+  onScreensaverOptionChange: (option: ScreensaverOption) => void
 }
 
 const POSE_MODEL_LABELS: Record<PoseModelVariant, string> = {
@@ -32,10 +36,12 @@ export function MirrorControlsLip({
   subjectDetectionCount,
   poseModelVariant,
   detectionInputLongEdgePx,
+  screensaverOption,
   onCapture,
   onTogglePosePoints,
   onPoseModelVariantChange,
   onDetectionInputLongEdgePxChange,
+  onScreensaverOptionChange,
 }: MirrorControlsLipProps) {
   const [visibility, setVisibility] = useState<ControlsVisibility>('hidden')
   const controlsRef = useRef<HTMLDivElement>(null)
@@ -189,6 +195,22 @@ export function MirrorControlsLip({
                   {DETECTION_INPUT_LONG_EDGE_OPTIONS.map((longEdgePx) => (
                     <option key={longEdgePx} value={longEdgePx}>
                       {longEdgePx}px
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-white/62">
+                Screensaver
+                <select
+                  value={String(screensaverOption)}
+                  onChange={(event) =>
+                    onScreensaverOptionChange(Number(event.target.value) as ScreensaverOption)
+                  }
+                  className="h-11 rounded-full border border-white/14 bg-white/7 px-4 text-sm font-semibold normal-case tracking-normal text-white/92 outline-none transition hover:border-cyan-200/40 hover:bg-cyan-300/10 focus:border-cyan-200/60 focus:bg-cyan-300/10">
+                  {SCREENSAVER_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      Screensaver {option}
                     </option>
                   ))}
                 </select>

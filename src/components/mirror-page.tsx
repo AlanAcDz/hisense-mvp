@@ -7,15 +7,19 @@ import {
   type MirrorStageProps,
 } from '@/components/mirror-stage'
 import {
+  DEFAULT_SCREENSAVER_OPTION,
   DETECTION_INPUT_LONG_EDGE_PX,
   type DetectionInputLongEdgePx,
+  getScreensaverVideoUrl,
   POSE_MODEL_VARIANT,
   type PoseModelVariant,
-  SCREENSAVER_VIDEO_ASSET_URL,
+  type ScreensaverOption,
+  SCREENSAVER_OPTIONS,
 } from '@/lib/mirror/constants'
 
 const SCREENSAVER_IDLE_MS = 60_000
 const SUBJECT_DETECTION_COUNT_STORAGE_KEY = 'hisense-mvp:subject-detection-count'
+const SCREENSAVER_OPTION_STORAGE_KEY = 'hisense-mvp:screensaver-option'
 
 type MirrorStageComponent = ForwardRefExoticComponent<
   MirrorStageProps & RefAttributes<MirrorStageHandle>
@@ -33,6 +37,9 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
   const [subjectDetected, setSubjectDetected] = useState(false)
   const [subjectDetectionCount, setSubjectDetectionCount] = useState(readSubjectDetectionCount)
   const [showScreensaver, setShowScreensaver] = useState(false)
+  const [screensaverOption, setScreensaverOption] = useState<ScreensaverOption>(
+    readScreensaverOption,
+  )
   const stageRef = useRef<MirrorStageHandle>(null)
 
   useEffect(() => {
@@ -47,6 +54,11 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
 
     return () => window.clearTimeout(timeoutId)
   }, [subjectDetected])
+
+  const handleScreensaverOptionChange = useCallback((option: ScreensaverOption) => {
+    setScreensaverOption(option)
+    writeScreensaverOption(option)
+  }, [])
 
   const handleSubjectDetectedChange = useCallback((detected: boolean) => {
     setSubjectDetected(detected)
@@ -77,8 +89,9 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
 
       {showScreensaver ? (
         <video
+          key={screensaverOption}
           className="pointer-events-none absolute inset-0 z-30 h-full w-full object-cover"
-          src={SCREENSAVER_VIDEO_ASSET_URL}
+          src={getScreensaverVideoUrl(screensaverOption)}
           autoPlay
           muted
           loop
@@ -101,10 +114,12 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
         subjectDetectionCount={subjectDetectionCount}
         poseModelVariant={poseModelVariant}
         detectionInputLongEdgePx={detectionInputLongEdgePx}
+        screensaverOption={screensaverOption}
         onCapture={() => stageRef.current?.capture()}
         onTogglePosePoints={() => setShowPosePoints((current) => !current)}
         onPoseModelVariantChange={setPoseModelVariant}
         onDetectionInputLongEdgePxChange={setDetectionInputLongEdgePx}
+        onScreensaverOptionChange={handleScreensaverOptionChange}
       />
     </main>
   )
@@ -121,4 +136,19 @@ function readSubjectDetectionCount() {
 
 function writeSubjectDetectionCount(count: number) {
   window.localStorage.setItem(SUBJECT_DETECTION_COUNT_STORAGE_KEY, String(count))
+}
+
+function readScreensaverOption(): ScreensaverOption {
+  if (typeof window === 'undefined') {
+    return DEFAULT_SCREENSAVER_OPTION
+  }
+
+  const stored = Number(window.localStorage.getItem(SCREENSAVER_OPTION_STORAGE_KEY))
+  return (SCREENSAVER_OPTIONS as readonly number[]).includes(stored)
+    ? (stored as ScreensaverOption)
+    : DEFAULT_SCREENSAVER_OPTION
+}
+
+function writeScreensaverOption(option: ScreensaverOption) {
+  window.localStorage.setItem(SCREENSAVER_OPTION_STORAGE_KEY, String(option))
 }
