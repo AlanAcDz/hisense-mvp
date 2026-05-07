@@ -40,9 +40,14 @@ export const REQUIRED_TORSO_INDICES = [
   LANDMARK_INDICES.rightHip,
 ]
 export const TORSO_VISIBILITY_THRESHOLD = 0.5
+export const CAMERA_CAPTURE_WIDTH_PX = 1280
+export const CAMERA_CAPTURE_HEIGHT_PX = 720
+export const CAMERA_CAPTURE_FRAME_RATE = 30
+export const STAGE_RENDER_LONG_EDGE_PX = 1280
+export const STAGE_RENDER_TARGET_FPS = 30
 export const DETECTION_INTERVAL_MS = 33
-export const DETECTION_INPUT_LONG_EDGE_PX = 512
-export const DETECTION_INPUT_LONG_EDGE_OPTIONS = [256, 512, 768, 1024, 1280, 1536] as const
+export const DETECTION_INPUT_LONG_EDGE_PX = 384
+export const DETECTION_INPUT_LONG_EDGE_OPTIONS = [256, 384, 512, 768, 1024, 1280, 1536] as const
 export type DetectionInputLongEdgePx = (typeof DETECTION_INPUT_LONG_EDGE_OPTIONS)[number]
 export const POSE_MODEL_VARIANTS = ['full', 'lite', 'heavy'] as const
 export type PoseModelVariant = (typeof POSE_MODEL_VARIANTS)[number]
@@ -77,8 +82,8 @@ export const BACKGROUND_MASK_DRAW_BLUR_PX = 1
 export const BACKGROUND_MASK_MIN_COVERAGE = 0.015
 export const VIDEO_MATTING_ENABLED = true
 export const VIDEO_MATTING_MODEL_URL = withBaseUrl('/assets/rvm/model/model.json')
-export const VIDEO_MATTING_INPUT_LONG_EDGE_PX = 640
-export const VIDEO_MATTING_INTERVAL_MS = 33
+export const VIDEO_MATTING_INPUT_LONG_EDGE_PX = 384
+export const VIDEO_MATTING_INTERVAL_MS = 66
 export const VIDEO_MATTING_STALE_MS = 1000
 export const VIDEO_MATTING_DOWNSAMPLE_RATIO = 0.5
 export const DEBUG_FPS_UPDATE_INTERVAL_MS = 500

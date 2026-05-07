@@ -200,7 +200,7 @@ describe('MirrorStage', () => {
     });
   }
 
-  it('requests the highest practical camera resolution', async () => {
+  it('requests the preferred camera resolution for kiosk hardware', async () => {
     const applyConstraints = vi.fn().mockResolvedValue(undefined);
     getUserMediaMock.mockResolvedValue(
       createCameraStream({
@@ -242,16 +242,16 @@ describe('MirrorStage', () => {
         audio: false,
         video: {
           facingMode: 'user',
-          width: { ideal: 3840 },
-          height: { ideal: 2160 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
           frameRate: { ideal: 30 },
         },
       })
     );
     await waitFor(() =>
       expect(applyConstraints).toHaveBeenCalledWith({
-        width: { exact: 2560 },
-        height: { exact: 1440 },
+        width: { exact: 1280 },
+        height: { exact: 720 },
         frameRate: { ideal: 30 },
       })
     );
@@ -388,7 +388,7 @@ describe('MirrorStage', () => {
       poseFrame: null,
       segmentationFrame: null,
     };
-    flushNextFrame(1016);
+    flushNextFrame(1040);
 
     expect(onSubjectDetectedChange).toHaveBeenLastCalledWith(false);
   });

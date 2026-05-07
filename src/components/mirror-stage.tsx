@@ -24,7 +24,12 @@ import {
 } from '@/lib/mirror/capture/compose-capture';
 import {
   BACKGROUND_VIDEO_ASSET_URL,
+  CAMERA_CAPTURE_FRAME_RATE,
+  CAMERA_CAPTURE_HEIGHT_PX,
+  CAMERA_CAPTURE_WIDTH_PX,
   DEBUG_FPS_UPDATE_INTERVAL_MS,
+  STAGE_RENDER_LONG_EDGE_PX,
+  STAGE_RENDER_TARGET_FPS,
   VIDEO_MATTING_ENABLED,
   VIDEO_MATTING_STALE_MS,
 } from '@/lib/mirror/constants';
@@ -54,9 +59,6 @@ type ShirtSceneControllerRuntime = Pick<
 >;
 
 const DEFAULT_CREATE_SCENE_CONTROLLER = () => new ShirtSceneController();
-const PREFERRED_CAMERA_WIDTH_PX = 3840;
-const PREFERRED_CAMERA_HEIGHT_PX = 2160;
-const PREFERRED_CAMERA_FRAME_RATE = 30;
 const BACKGROUND_VIDEO_LOOP_GUARD_SECONDS = 1 / 24;
 const BACKGROUND_VIDEO_LOOP_START_SECONDS = 0.001;
 const BACKGROUND_VIDEO_LOOP_HOLD_MS = 40;
@@ -96,10 +98,10 @@ function useStageSize(stageRef: RefObject<HTMLDivElement | null>) {
         return;
       }
 
-      const nextSize = {
-        width: Math.round(nextEntry.contentRect.width),
-        height: Math.round(nextEntry.contentRect.height),
-      };
+      const nextSize = getStageRenderSize(
+        nextEntry.contentRect.width,
+        nextEntry.contentRect.height
+      );
 
       setStageSize((previous) => {
         if (previous.width === nextSize.width && previous.height === nextSize.height) {
@@ -124,6 +126,25 @@ function clearCanvas(canvas: HTMLCanvasElement | null, stageSize: StageSize) {
   }
 
   ctx.clearRect(0, 0, stageSize.width, stageSize.height);
+}
+
+function getStageRenderSize(width: number, height: number): StageSize {
+  const roundedWidth = Math.max(0, Math.round(width));
+  const roundedHeight = Math.max(0, Math.round(height));
+  const longEdge = Math.max(roundedWidth, roundedHeight);
+
+  if (!longEdge || longEdge <= STAGE_RENDER_LONG_EDGE_PX) {
+    return {
+      width: roundedWidth,
+      height: roundedHeight,
+    };
+  }
+
+  const scale = STAGE_RENDER_LONG_EDGE_PX / longEdge;
+  return {
+    width: Math.max(1, Math.round(roundedWidth * scale)),
+    height: Math.max(1, Math.round(roundedHeight * scale)),
+  };
 }
 
 function canDrawBackgroundVideoFrame(
@@ -174,7 +195,7 @@ function getMaxCameraConstraint(
   return exact ? { exact: targetValue } : { ideal: targetValue };
 }
 
-async function requestMaximumCameraResolution(stream: MediaStream) {
+async function requestPreferredCameraResolution(stream: MediaStream) {
   const track = stream.getVideoTracks?.()[0];
   if (!track?.getCapabilities || !track.applyConstraints) {
     return;
@@ -182,20 +203,20 @@ async function requestMaximumCameraResolution(stream: MediaStream) {
 
   const capabilities = track.getCapabilities();
   const constraints: MediaTrackConstraints = {
-    width: getMaxCameraConstraint(capabilities.width, PREFERRED_CAMERA_WIDTH_PX, true),
-    height: getMaxCameraConstraint(capabilities.height, PREFERRED_CAMERA_HEIGHT_PX, true),
+    width: getMaxCameraConstraint(capabilities.width, CAMERA_CAPTURE_WIDTH_PX, true),
+    height: getMaxCameraConstraint(capabilities.height, CAMERA_CAPTURE_HEIGHT_PX, true),
     frameRate: capabilities.frameRate?.max
-      ? { ideal: Math.min(capabilities.frameRate.max, PREFERRED_CAMERA_FRAME_RATE) }
-      : { ideal: PREFERRED_CAMERA_FRAME_RATE },
+      ? { ideal: Math.min(capabilities.frameRate.max, CAMERA_CAPTURE_FRAME_RATE) }
+      : { ideal: CAMERA_CAPTURE_FRAME_RATE },
   };
 
   try {
     await track.applyConstraints(constraints);
   } catch {
     await track.applyConstraints({
-      width: getMaxCameraConstraint(capabilities.width, PREFERRED_CAMERA_WIDTH_PX),
-      height: getMaxCameraConstraint(capabilities.height, PREFERRED_CAMERA_HEIGHT_PX),
-      frameRate: { ideal: PREFERRED_CAMERA_FRAME_RATE },
+      width: getMaxCameraConstraint(capabilities.width, CAMERA_CAPTURE_WIDTH_PX),
+      height: getMaxCameraConstraint(capabilities.height, CAMERA_CAPTURE_HEIGHT_PX),
+      frameRate: { ideal: CAMERA_CAPTURE_FRAME_RATE },
     });
   }
 }
@@ -227,6 +248,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   const streamRef = useRef<MediaStream | null>(null);
   const lastDetectAtRef = useRef(0);
   const lastMattingDetectAtRef = useRef(0);
+  const lastRenderAtRef = useRef(0);
   const renderFpsRef = useRef({ frames: 0, lastUpdatedAt: 0 });
   const subjectDetectedRef = useRef(false);
   const sceneControllerRef = useRef<ShirtSceneControllerRuntime | null>(null);
@@ -416,9 +438,9 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
           audio: false,
           video: {
             facingMode: 'user',
-            width: { ideal: PREFERRED_CAMERA_WIDTH_PX },
-            height: { ideal: PREFERRED_CAMERA_HEIGHT_PX },
-            frameRate: { ideal: PREFERRED_CAMERA_FRAME_RATE },
+            width: { ideal: CAMERA_CAPTURE_WIDTH_PX },
+            height: { ideal: CAMERA_CAPTURE_HEIGHT_PX },
+            frameRate: { ideal: CAMERA_CAPTURE_FRAME_RATE },
           },
         });
 
@@ -428,7 +450,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         }
 
         streamRef.current = stream;
-        await requestMaximumCameraResolution(stream);
+        await requestPreferredCameraResolution(stream);
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -545,6 +567,13 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
     }
 
     const renderFrame = (now: number) => {
+      const targetRenderIntervalMs = 1000 / STAGE_RENDER_TARGET_FPS;
+      if (lastRenderAtRef.current && now - lastRenderAtRef.current < targetRenderIntervalMs) {
+        animationFrameRef.current = window.requestAnimationFrame(renderFrame);
+        return;
+      }
+
+      lastRenderAtRef.current = now;
       updateRenderFps(now);
 
       const currentVideo = videoRef.current;
@@ -569,22 +598,12 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         return;
       }
 
-      const currentBackgroundContext = currentBackgroundCanvas.getContext('2d');
-      const currentForegroundContext = currentForegroundCanvas.getContext('2d');
-      const currentArmOverlayContext = currentArmOverlayCanvas.getContext('2d');
-      const currentArmMaskContext = currentArmMaskCanvas.getContext('2d');
-      const currentPoseContext = currentPoseCanvas.getContext('2d');
-      const currentDisplayContext = currentDisplayCanvas.getContext('2d');
-      if (
-        !currentBackgroundContext ||
-        !currentForegroundContext ||
-        !currentArmOverlayContext ||
-        !currentArmMaskContext ||
-        !currentPoseContext ||
-        !currentDisplayContext
-      ) {
-        return;
-      }
+      const currentBackgroundContext = backgroundContext;
+      const currentForegroundContext = foregroundContext;
+      const currentArmOverlayContext = armOverlayContext;
+      const currentArmMaskContext = armMaskContext;
+      const currentPoseContext = poseContext;
+      const currentDisplayContext = displayContext;
 
       if (!currentVideo.videoWidth || !currentVideo.videoHeight) {
         syncSubjectDetected(false);

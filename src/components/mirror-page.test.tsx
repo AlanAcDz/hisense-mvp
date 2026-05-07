@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MirrorPage } from '@/components/mirror-page';
 import type { MirrorStageHandle, MirrorStageProps } from '@/components/mirror-stage';
@@ -266,10 +266,17 @@ describe('MirrorPage', () => {
       { onSubjectDetectedChange },
       ref
     ) {
+      const lastNotifiedSubjectDetectedRef = useRef<boolean | null>(null);
+
       useImperativeHandle(ref, () => ({
         capture() {},
       }));
       useEffect(() => {
+        if (lastNotifiedSubjectDetectedRef.current === subjectDetected) {
+          return;
+        }
+
+        lastNotifiedSubjectDetectedRef.current = subjectDetected;
         onSubjectDetectedChange?.(subjectDetected);
       });
 
