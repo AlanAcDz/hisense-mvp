@@ -7,6 +7,8 @@ import {
   DETECTION_INPUT_LONG_EDGE_PX,
   getScreensaverVideoUrl,
   POSE_MODEL_VARIANT,
+  SUBJECT_DETECTED_OVERLAY_COOLDOWN_MS,
+  SUBJECT_DETECTED_OVERLAY_VIDEO_URL,
 } from '@/lib/mirror/constants';
 
 describe('MirrorPage', () => {
@@ -20,6 +22,10 @@ describe('MirrorPage', () => {
     return document.querySelector<HTMLVideoElement>(
       `video[src="${getScreensaverVideoUrl(DEFAULT_SCREENSAVER_OPTION)}"]`
     );
+  }
+
+  function querySubjectDetectedOverlayVideo() {
+    return screen.queryByTestId('subject-detected-overlay-video') as HTMLVideoElement | null;
   }
 
   it('renders the mirror immediately and keeps pose points hidden by default', () => {
@@ -107,6 +113,96 @@ describe('MirrorPage', () => {
     render(<MirrorPage StageComponent={FakeStage} />);
 
     expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
+  it('plays the transparent subject overlay once when a subject is detected', () => {
+    let notifySubjectDetected: MirrorStageProps['onSubjectDetectedChange'];
+    const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(
+      { onSubjectDetectedChange },
+      ref
+    ) {
+      useImperativeHandle(ref, () => ({
+        capture() {},
+      }));
+      notifySubjectDetected = onSubjectDetectedChange;
+
+      return <div data-testid="mirror-stage" />;
+    });
+
+    render(<MirrorPage StageComponent={FakeStage} />);
+
+    expect(querySubjectDetectedOverlayVideo()).not.toBeInTheDocument();
+
+    act(() => {
+      notifySubjectDetected?.(true);
+    });
+
+    expect(querySubjectDetectedOverlayVideo()).toHaveAttribute(
+      'src',
+      SUBJECT_DETECTED_OVERLAY_VIDEO_URL
+    );
+    expect(document.querySelectorAll('[data-testid="subject-detected-overlay-video"]')).toHaveLength(
+      1
+    );
+
+    act(() => {
+      notifySubjectDetected?.(false);
+      notifySubjectDetected?.(true);
+    });
+
+    expect(document.querySelectorAll('[data-testid="subject-detected-overlay-video"]')).toHaveLength(
+      1
+    );
+  });
+
+  it('starts the subject overlay cooldown only after playback ends', () => {
+    vi.useFakeTimers();
+    let notifySubjectDetected: MirrorStageProps['onSubjectDetectedChange'];
+    const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(
+      { onSubjectDetectedChange },
+      ref
+    ) {
+      useImperativeHandle(ref, () => ({
+        capture() {},
+      }));
+      notifySubjectDetected = onSubjectDetectedChange;
+
+      return <div data-testid="mirror-stage" />;
+    });
+
+    render(<MirrorPage StageComponent={FakeStage} />);
+
+    act(() => {
+      notifySubjectDetected?.(true);
+    });
+
+    const firstOverlay = querySubjectDetectedOverlayVideo();
+    expect(firstOverlay).toBeInTheDocument();
+
+    act(() => {
+      fireEvent.ended(firstOverlay as HTMLVideoElement);
+    });
+    expect(querySubjectDetectedOverlayVideo()).not.toBeInTheDocument();
+
+    act(() => {
+      notifySubjectDetected?.(false);
+      notifySubjectDetected?.(true);
+    });
+    expect(querySubjectDetectedOverlayVideo()).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(SUBJECT_DETECTED_OVERLAY_COOLDOWN_MS - 1);
+      notifySubjectDetected?.(false);
+      notifySubjectDetected?.(true);
+    });
+    expect(querySubjectDetectedOverlayVideo()).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+      notifySubjectDetected?.(false);
+      notifySubjectDetected?.(true);
+    });
+    expect(querySubjectDetectedOverlayVideo()).toBeInTheDocument();
   });
 
   it('reveals the right-side controls from the hidden lip', () => {

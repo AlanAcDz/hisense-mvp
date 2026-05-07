@@ -15,6 +15,8 @@ import {
   type PoseModelVariant,
   type ScreensaverOption,
   SCREENSAVER_OPTIONS,
+  SUBJECT_DETECTED_OVERLAY_COOLDOWN_MS,
+  SUBJECT_DETECTED_OVERLAY_VIDEO_URL,
 } from '@/lib/mirror/constants'
 
 const SCREENSAVER_ALTERNATE_MS = 5 * 60_000
@@ -39,7 +41,11 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
   const [showScreensaver, setShowScreensaver] = useState(false)
   const [screensaverOption, setScreensaverOption] =
     useState<ScreensaverOption>(readScreensaverOption)
+  const [overlayPlaybackKey, setOverlayPlaybackKey] = useState(0)
+  const [showSubjectDetectedOverlay, setShowSubjectDetectedOverlay] = useState(false)
   const stageRef = useRef<MirrorStageHandle>(null)
+  const overlayPlayingRef = useRef(false)
+  const nextOverlayAllowedAtRef = useRef(0)
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -61,11 +67,24 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
       return
     }
 
+    const now = Date.now()
+    if (!overlayPlayingRef.current && now >= nextOverlayAllowedAtRef.current) {
+      overlayPlayingRef.current = true
+      setShowSubjectDetectedOverlay(true)
+      setOverlayPlaybackKey((currentKey) => currentKey + 1)
+    }
+
     setSubjectDetectionCount((currentCount) => {
       const nextCount = currentCount + 1
       writeSubjectDetectionCount(nextCount)
       return nextCount
     })
+  }, [])
+
+  const handleSubjectDetectedOverlayEnded = useCallback(() => {
+    overlayPlayingRef.current = false
+    nextOverlayAllowedAtRef.current = Date.now() + SUBJECT_DETECTED_OVERLAY_COOLDOWN_MS
+    setShowSubjectDetectedOverlay(false)
   }, [])
 
   return (
@@ -93,6 +112,24 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
           preload="auto"
           aria-hidden="true"
         />
+      ) : null}
+
+      {showSubjectDetectedOverlay ? (
+        <div className="pointer-events-none absolute inset-0 z-[80] grid place-items-center">
+          <video
+            key={overlayPlaybackKey}
+            className="h-auto w-[min(42rem,58vw)] max-w-[82vw] object-contain"
+            src={SUBJECT_DETECTED_OVERLAY_VIDEO_URL}
+            autoPlay
+            muted
+            playsInline
+            preload="auto"
+            aria-hidden="true"
+            data-testid="subject-detected-overlay-video"
+            onEnded={handleSubjectDetectedOverlayEnded}
+            onError={handleSubjectDetectedOverlayEnded}
+          />
+        </div>
       ) : null}
 
       {!subjectDetected && !showScreensaver ? (

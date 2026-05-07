@@ -6,6 +6,10 @@ function withBaseUrl(path: string) {
 
 export const JERSEY_RIGGED_MODEL_URL = withBaseUrl('/assets/models/jersey_mexico_rig.glb')
 export const BACKGROUND_VIDEO_ASSET_URL = withBaseUrl('/assets/backgrounds/background.mp4')
+export const SUBJECT_DETECTED_OVERLAY_VIDEO_URL = withBaseUrl(
+  '/assets/overlays/subject-detected-overlay.webm'
+)
+export const SUBJECT_DETECTED_OVERLAY_COOLDOWN_MS = 15_000
 export const SCREENSAVER_OPTIONS = [1, 2] as const
 export type ScreensaverOption = (typeof SCREENSAVER_OPTIONS)[number]
 export const DEFAULT_SCREENSAVER_OPTION: ScreensaverOption = 1
