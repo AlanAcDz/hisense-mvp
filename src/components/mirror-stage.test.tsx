@@ -242,16 +242,16 @@ describe('MirrorStage', () => {
         audio: false,
         video: {
           facingMode: 'user',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 960 },
+          height: { ideal: 540 },
           frameRate: { ideal: 30 },
         },
       })
     );
     await waitFor(() =>
       expect(applyConstraints).toHaveBeenCalledWith({
-        width: { exact: 1280 },
-        height: { exact: 720 },
+        width: { exact: 960 },
+        height: { exact: 540 },
         frameRate: { ideal: 30 },
       })
     );
