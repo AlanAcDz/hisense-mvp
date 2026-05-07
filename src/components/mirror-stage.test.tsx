@@ -293,4 +293,44 @@ describe('MirrorStage', () => {
 
     expect(onSubjectDetectedChange).toHaveBeenLastCalledWith(false);
   });
+
+  it('ignores background-sized torso detections', async () => {
+    const backgroundLandmarks = buildNormalizedLandmarks();
+    backgroundLandmarks[11] = { x: 0.47, y: 0.43, z: 0, visibility: 0.98 };
+    backgroundLandmarks[12] = { x: 0.53, y: 0.43, z: 0, visibility: 0.98 };
+    backgroundLandmarks[23] = { x: 0.48, y: 0.58, z: 0, visibility: 0.98 };
+    backgroundLandmarks[24] = { x: 0.52, y: 0.58, z: 0, visibility: 0.98 };
+    let landmarkerFrame: LandmarkerFrame = {
+      poseFrame: createPoseFrame(buildNormalizedLandmarks(), buildWorldLandmarks(), 1000),
+      segmentationFrame: null,
+    };
+    const onSubjectDetectedChange = vi.fn();
+
+    render(
+      <MirrorStage
+        showPosePoints={false}
+        onSubjectDetectedChange={onSubjectDetectedChange}
+        usePoseLandmarkerRuntime={() => ({
+          detectFrame: () => landmarkerFrame,
+          error: null,
+          isLoading: false,
+        })}
+        useVideoMattingRuntime={videoMattingRuntime}
+      />
+    );
+
+    await waitFor(() => expect(getUserMediaMock).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    flushNextFrame();
+
+    expect(onSubjectDetectedChange).toHaveBeenCalledWith(true);
+
+    landmarkerFrame = {
+      poseFrame: createPoseFrame(backgroundLandmarks, buildWorldLandmarks(), 1040),
+      segmentationFrame: null,
+    };
+    flushNextFrame(1040);
+
+    expect(onSubjectDetectedChange).toHaveBeenLastCalledWith(false);
+  });
 });

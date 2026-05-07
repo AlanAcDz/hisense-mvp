@@ -36,7 +36,11 @@ import {
   type RobustVideoMattingOptions,
 } from '@/lib/mirror/matting/use-robust-video-matting';
 import { drawPoseOverlay } from '@/lib/mirror/pose/drawing';
-import { computeTorsoTransform, getCoverLayout } from '@/lib/mirror/pose/torso';
+import {
+  computeTorsoTransform,
+  getCoverLayout,
+  isTorsoTransformInForegroundScope,
+} from '@/lib/mirror/pose/torso';
 import {
   usePoseLandmarker,
   type PoseLandmarkerOptions,
@@ -545,7 +549,10 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         poseOverlayWasVisibleRef.current = false;
       }
 
-      const torsoTransform = computeTorsoTransform(nextPoseFrame, stageSize, coverLayout);
+      const detectedTorsoTransform = computeTorsoTransform(nextPoseFrame, stageSize, coverLayout);
+      const torsoTransform = isTorsoTransformInForegroundScope(detectedTorsoTransform, stageSize)
+        ? detectedTorsoTransform
+        : null;
       syncSubjectDetected(Boolean(torsoTransform));
 
       const backgroundMatte = VIDEO_MATTING_ENABLED

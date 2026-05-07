@@ -40,6 +40,15 @@ export const REQUIRED_TORSO_INDICES = [
   LANDMARK_INDICES.rightHip,
 ]
 export const TORSO_VISIBILITY_THRESHOLD = 0.5
+export const SUBJECT_FOREGROUND_MIN_TORSO_HEIGHT_RATIO = 0.32
+export const SUBJECT_FOREGROUND_CENTER_X_RANGE = {
+  min: 0.25,
+  max: 0.75,
+} as const
+export const SUBJECT_FOREGROUND_CENTER_Y_RANGE = {
+  min: 0.16,
+  max: 0.88,
+} as const
 export const CAMERA_CAPTURE_WIDTH_PX = 1920
 export const CAMERA_CAPTURE_HEIGHT_PX = 1080
 export const CAMERA_CAPTURE_FRAME_RATE = 30
@@ -84,7 +93,7 @@ export const BACKGROUND_MASK_DRAW_BLUR_PX = 1
 export const BACKGROUND_MASK_MIN_COVERAGE = 0.015
 export const VIDEO_MATTING_ENABLED = true
 export const VIDEO_MATTING_MODEL_URL = withBaseUrl('/assets/rvm/model/model.json')
-export const VIDEO_MATTING_INPUT_LONG_EDGE_PX = 384
+export const VIDEO_MATTING_INPUT_LONG_EDGE_PX = 720
 export const VIDEO_MATTING_INTERVAL_MS = 40
 export const VIDEO_MATTING_STALE_MS = 1000
 export const VIDEO_MATTING_DOWNSAMPLE_RATIO = 0.5

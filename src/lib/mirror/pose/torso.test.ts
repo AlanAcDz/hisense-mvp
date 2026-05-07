@@ -4,6 +4,7 @@ import {
   computeTorsoTransform,
   createPoseFrame,
   getCoverLayout,
+  isTorsoTransformInForegroundScope,
 } from '@/lib/mirror/pose/torso';
 import type { PoseLandmark2D, PoseLandmark3D } from '@/lib/mirror/types';
 
@@ -116,6 +117,47 @@ describe('torso transform', () => {
 
     const roll = new Euler().setFromQuaternion(transform!.rotation).z;
     expect(Math.abs(roll)).toBeLessThan(Math.PI / 4);
+  });
+
+  it('accepts a centered, foreground-sized torso for subject detection', () => {
+    const poseFrame = createPoseFrame(buildNormalizedLandmarks(), buildWorldLandmarks(), 1000);
+    const stageSize = { width: 1280, height: 720 };
+    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
+    const transform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
+
+    expect(isTorsoTransformInForegroundScope(transform, stageSize)).toBe(true);
+  });
+
+  it('rejects a distant background-sized torso for subject detection', () => {
+    const normalizedLandmarks = buildNormalizedLandmarks();
+    normalizedLandmarks[11] = { x: 0.47, y: 0.43, z: 0, visibility: 0.98 };
+    normalizedLandmarks[12] = { x: 0.53, y: 0.43, z: 0, visibility: 0.98 };
+    normalizedLandmarks[23] = { x: 0.48, y: 0.58, z: 0, visibility: 0.98 };
+    normalizedLandmarks[24] = { x: 0.52, y: 0.58, z: 0, visibility: 0.98 };
+
+    const poseFrame = createPoseFrame(normalizedLandmarks, buildWorldLandmarks(), 1000);
+    const stageSize = { width: 1280, height: 720 };
+    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
+    const transform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
+
+    expect(transform).not.toBeNull();
+    expect(isTorsoTransformInForegroundScope(transform, stageSize)).toBe(false);
+  });
+
+  it('rejects a foreground-sized torso outside the center interaction area', () => {
+    const normalizedLandmarks = buildNormalizedLandmarks();
+    normalizedLandmarks[11] = { x: 0.8, y: 0.3, z: 0, visibility: 0.98 };
+    normalizedLandmarks[12] = { x: 0.98, y: 0.3, z: 0, visibility: 0.98 };
+    normalizedLandmarks[23] = { x: 0.82, y: 0.7, z: 0, visibility: 0.98 };
+    normalizedLandmarks[24] = { x: 0.96, y: 0.7, z: 0, visibility: 0.98 };
+
+    const poseFrame = createPoseFrame(normalizedLandmarks, buildWorldLandmarks(), 1000);
+    const stageSize = { width: 1280, height: 720 };
+    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
+    const transform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
+
+    expect(transform).not.toBeNull();
+    expect(isTorsoTransformInForegroundScope(transform, stageSize)).toBe(false);
   });
 });
 

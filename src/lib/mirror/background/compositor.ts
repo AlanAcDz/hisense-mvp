@@ -970,7 +970,7 @@ export function getBackgroundGuidance(
   reusedCachedMatte: boolean
 ) {
   if (!hasTorso) {
-    return 'Step back and keep your shoulders and hips visible.';
+    return 'Stand in the foreground with your shoulders and hips visible.';
   }
 
   if (!hasSegmentation) {

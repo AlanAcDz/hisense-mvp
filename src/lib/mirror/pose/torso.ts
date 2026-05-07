@@ -2,6 +2,9 @@ import { Euler, Quaternion, Vector3 } from 'three';
 import {
   LANDMARK_INDICES,
   SHIRT_CALIBRATION,
+  SUBJECT_FOREGROUND_CENTER_X_RANGE,
+  SUBJECT_FOREGROUND_CENTER_Y_RANGE,
+  SUBJECT_FOREGROUND_MIN_TORSO_HEIGHT_RATIO,
   TORSO_VISIBILITY_THRESHOLD,
 } from '@/lib/mirror/constants';
 import type {
@@ -306,6 +309,31 @@ export function computeTorsoTransform(
       4,
     rotation,
   };
+}
+
+export function isTorsoTransformInForegroundScope(
+  torsoTransform: TorsoTransform | null,
+  stageSize: StageSize
+) {
+  if (!torsoTransform || !stageSize.width || !stageSize.height) {
+    return false;
+  }
+
+  const torsoCenter = {
+    x: (torsoTransform.topCenter.x + torsoTransform.bottomCenter.x) / 2,
+    y: (torsoTransform.topCenter.y + torsoTransform.bottomCenter.y) / 2,
+  };
+  const centerXRatio = torsoCenter.x / stageSize.width;
+  const centerYRatio = torsoCenter.y / stageSize.height;
+  const heightRatio = torsoTransform.heightPx / stageSize.height;
+
+  return (
+    heightRatio >= SUBJECT_FOREGROUND_MIN_TORSO_HEIGHT_RATIO &&
+    centerXRatio >= SUBJECT_FOREGROUND_CENTER_X_RANGE.min &&
+    centerXRatio <= SUBJECT_FOREGROUND_CENTER_X_RANGE.max &&
+    centerYRatio >= SUBJECT_FOREGROUND_CENTER_Y_RANGE.min &&
+    centerYRatio <= SUBJECT_FOREGROUND_CENTER_Y_RANGE.max
+  );
 }
 
 function computeArmZRotation(
