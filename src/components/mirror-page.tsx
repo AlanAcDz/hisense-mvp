@@ -17,7 +17,7 @@ import {
   SCREENSAVER_OPTIONS,
 } from '@/lib/mirror/constants'
 
-const SCREENSAVER_IDLE_MS = 60_000
+const SCREENSAVER_ALTERNATE_MS = 5 * 60_000
 const SUBJECT_DETECTION_COUNT_STORAGE_KEY = 'hisense-mvp:subject-detection-count'
 const SCREENSAVER_OPTION_STORAGE_KEY = 'hisense-mvp:screensaver-option'
 
@@ -37,23 +37,17 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
   const [subjectDetected, setSubjectDetected] = useState(false)
   const [subjectDetectionCount, setSubjectDetectionCount] = useState(readSubjectDetectionCount)
   const [showScreensaver, setShowScreensaver] = useState(false)
-  const [screensaverOption, setScreensaverOption] = useState<ScreensaverOption>(
-    readScreensaverOption,
-  )
+  const [screensaverOption, setScreensaverOption] =
+    useState<ScreensaverOption>(readScreensaverOption)
   const stageRef = useRef<MirrorStageHandle>(null)
 
   useEffect(() => {
-    if (subjectDetected) {
-      setShowScreensaver(false)
-      return
-    }
+    const intervalId = window.setInterval(() => {
+      setShowScreensaver((current) => !current)
+    }, SCREENSAVER_ALTERNATE_MS)
 
-    const timeoutId = window.setTimeout(() => {
-      setShowScreensaver(true)
-    }, SCREENSAVER_IDLE_MS)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [subjectDetected])
+    return () => window.clearInterval(intervalId)
+  }, [])
 
   const handleScreensaverOptionChange = useCallback((option: ScreensaverOption) => {
     setScreensaverOption(option)
@@ -78,6 +72,7 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
     <main className="relative h-dvh w-screen overflow-hidden bg-black">
       <StageComponent
         ref={stageRef}
+        cameraEnabled={!showScreensaver}
         showPosePoints={showPosePoints}
         poseLandmarkerOptions={{
           modelVariant: poseModelVariant,
@@ -101,7 +96,7 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
       ) : null}
 
       {!subjectDetected && !showScreensaver ? (
-        <section className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6">
+        <section className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
           <p className="max-w-[18rem] text-center text-2xl font-semibold leading-relaxed text-white [text-shadow:_0_2px_12px_rgba(0,0,0,0.65)] sm:max-w-[22rem] sm:text-3xl lg:max-w-[26rem] lg:text-[2.6rem]">
             Colócate frente a la pantalla para comenzar la experiencia
           </p>

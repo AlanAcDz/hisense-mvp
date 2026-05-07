@@ -113,6 +113,11 @@ describe('MirrorStage', () => {
       value: vi.fn().mockResolvedValue(undefined),
     });
 
+    Object.defineProperty(HTMLMediaElement.prototype, 'pause', {
+      configurable: true,
+      value: vi.fn(),
+    });
+
     Object.defineProperty(HTMLVideoElement.prototype, 'readyState', {
       configurable: true,
       get: () => HTMLMediaElement.HAVE_ENOUGH_DATA,
@@ -229,6 +234,57 @@ describe('MirrorStage', () => {
         frameRate: { ideal: 30 },
       })
     );
+  });
+
+  it('starts the camera only while cameraEnabled is true', async () => {
+    const stop = vi.fn();
+    getUserMediaMock.mockResolvedValue(createCameraStream({ stop }));
+
+    const { rerender } = render(
+      <MirrorStage
+        cameraEnabled={false}
+        showPosePoints={false}
+        usePoseLandmarkerRuntime={() => ({
+          detectFrame: () => ({ poseFrame: null, segmentationFrame: null }),
+          error: null,
+          isLoading: false,
+        })}
+        useVideoMattingRuntime={videoMattingRuntime}
+      />
+    );
+
+    await act(async () => {});
+    expect(getUserMediaMock).not.toHaveBeenCalled();
+
+    rerender(
+      <MirrorStage
+        cameraEnabled
+        showPosePoints={false}
+        usePoseLandmarkerRuntime={() => ({
+          detectFrame: () => ({ poseFrame: null, segmentationFrame: null }),
+          error: null,
+          isLoading: false,
+        })}
+        useVideoMattingRuntime={videoMattingRuntime}
+      />
+    );
+
+    await waitFor(() => expect(getUserMediaMock).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <MirrorStage
+        cameraEnabled={false}
+        showPosePoints={false}
+        usePoseLandmarkerRuntime={() => ({
+          detectFrame: () => ({ poseFrame: null, segmentationFrame: null }),
+          error: null,
+          isLoading: false,
+        })}
+        useVideoMattingRuntime={videoMattingRuntime}
+      />
+    );
+
+    expect(stop).toHaveBeenCalledTimes(1);
   });
 
   it('shows paused guidance when background replacement lacks a matte', async () => {

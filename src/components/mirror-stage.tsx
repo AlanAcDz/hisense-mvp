@@ -56,6 +56,7 @@ export interface MirrorStageHandle {
 
 export interface MirrorStageProps {
   showPosePoints: boolean;
+  cameraEnabled?: boolean;
   poseLandmarkerOptions?: PoseLandmarkerOptions;
   onStatusChange?: (status: string | null) => void;
   onSubjectDetectedChange?: (detected: boolean) => void;
@@ -166,6 +167,31 @@ function canDrawBackgroundVideoFrame(
   return false;
 }
 
+function drawBackgroundVideoLayer(
+  ctx: CanvasRenderingContext2D,
+  stageSize: StageSize,
+  now: number,
+  backgroundVideoRef: RefObject<HTMLVideoElement | null>,
+  hasBackgroundVideoFrameRef: { current: boolean },
+  backgroundVideoHoldUntilRef: { current: number }
+) {
+  if (
+    canDrawBackgroundVideoFrame(
+      backgroundVideoRef.current,
+      now,
+      backgroundVideoHoldUntilRef
+    )
+  ) {
+    drawBackgroundLayer(ctx, stageSize, backgroundVideoRef.current);
+    hasBackgroundVideoFrameRef.current = true;
+    return;
+  }
+
+  if (!hasBackgroundVideoFrameRef.current) {
+    drawBackgroundLayer(ctx, stageSize, null);
+  }
+}
+
 function getMaxCameraConstraint(
   range: MediaSettingsRange | undefined,
   preferredValue: number,
@@ -206,9 +232,23 @@ async function requestPreferredCameraResolution(stream: MediaStream) {
   }
 }
 
+function stopCameraStream(
+  streamRef: RefObject<MediaStream | null>,
+  videoRef: RefObject<HTMLVideoElement | null>
+) {
+  streamRef.current?.getTracks().forEach((track) => track.stop());
+  streamRef.current = null;
+
+  if (videoRef.current) {
+    videoRef.current.pause();
+    videoRef.current.srcObject = null;
+  }
+}
+
 export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function MirrorStage(
   {
     showPosePoints,
+    cameraEnabled = true,
     poseLandmarkerOptions,
     onStatusChange,
     onSubjectDetectedChange,
@@ -367,6 +407,20 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   useEffect(() => {
     let cancelled = false;
 
+    if (!cameraEnabled) {
+      syncSubjectDetected(false);
+      stopCameraStream(streamRef, videoRef);
+      setSceneState((previous) =>
+        previous.cameraError === null
+          ? previous
+          : {
+              ...previous,
+              cameraError: null,
+            }
+      );
+      return;
+    }
+
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -411,10 +465,9 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
 
     return () => {
       cancelled = true;
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
+      stopCameraStream(streamRef, videoRef);
     };
-  }, []);
+  }, [cameraEnabled]);
 
   useEffect(() => {
     const backgroundCanvas = backgroundCanvasRef.current;
@@ -495,9 +548,16 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       const currentForegroundContext = foregroundContext;
       const currentPoseContext = poseContext;
 
-      if (!currentVideo.videoWidth || !currentVideo.videoHeight) {
+      if (!cameraEnabled || !currentVideo.videoWidth || !currentVideo.videoHeight) {
         syncSubjectDetected(false);
-        clearCanvas(currentBackgroundCanvas, stageSize);
+        drawBackgroundVideoLayer(
+          currentBackgroundContext,
+          stageSize,
+          now,
+          backgroundVideoRef,
+          hasBackgroundVideoFrameRef,
+          backgroundVideoHoldUntilRef
+        );
         clearCanvas(currentForegroundCanvas, stageSize);
         lastBackgroundLayerAtRef.current = 0;
         currentPoseContext.clearRect(0, 0, stageSize.width, stageSize.height);
@@ -594,18 +654,14 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
           !lastBackgroundLayerAtRef.current ||
           now - lastBackgroundLayerAtRef.current >= BACKGROUND_LAYER_INTERVAL_MS
         ) {
-          if (
-            canDrawBackgroundVideoFrame(
-              backgroundVideoRef.current,
-              now,
-              backgroundVideoHoldUntilRef
-            )
-          ) {
-            drawBackgroundLayer(currentBackgroundContext, stageSize, backgroundVideoRef.current);
-            hasBackgroundVideoFrameRef.current = true;
-          } else if (!hasBackgroundVideoFrameRef.current) {
-            drawBackgroundLayer(currentBackgroundContext, stageSize, null);
-          }
+          drawBackgroundVideoLayer(
+            currentBackgroundContext,
+            stageSize,
+            now,
+            backgroundVideoRef,
+            hasBackgroundVideoFrameRef,
+            backgroundVideoHoldUntilRef
+          );
           lastBackgroundLayerAtRef.current = now;
         }
 
@@ -636,14 +692,21 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
               }
         );
       } else {
-        currentBackgroundContext.clearRect(0, 0, stageSize.width, stageSize.height);
-        lastBackgroundLayerAtRef.current = 0;
-        drawForegroundLayer({
-          ctx: currentForegroundContext,
-          coverLayout,
-          stageSize,
-          source: currentVideo,
-        });
+        if (
+          !lastBackgroundLayerAtRef.current ||
+          now - lastBackgroundLayerAtRef.current >= BACKGROUND_LAYER_INTERVAL_MS
+        ) {
+          drawBackgroundVideoLayer(
+            currentBackgroundContext,
+            stageSize,
+            now,
+            backgroundVideoRef,
+            hasBackgroundVideoFrameRef,
+            backgroundVideoHoldUntilRef
+          );
+          lastBackgroundLayerAtRef.current = now;
+        }
+        currentForegroundContext.clearRect(0, 0, stageSize.width, stageSize.height);
 
         const guidance = getBackgroundGuidance(
           Boolean(torsoTransform),
@@ -673,7 +736,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         animationFrameRef.current = null;
       }
     };
-  }, [detectFrame, detectMattingFrame, onSubjectDetectedChange, showPosePoints, stageSize]);
+  }, [cameraEnabled, detectFrame, detectMattingFrame, onSubjectDetectedChange, showPosePoints, stageSize]);
 
   useImperativeHandle(
     ref,

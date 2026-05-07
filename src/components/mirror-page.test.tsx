@@ -225,22 +225,26 @@ describe('MirrorPage', () => {
     expect(captureSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the screensaver after one minute without a detected subject', () => {
+  it('alternates between AR mirror and screensaver every five minutes', () => {
     vi.useFakeTimers();
-    const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(_props, ref) {
+    const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(
+      { cameraEnabled },
+      ref
+    ) {
       useImperativeHandle(ref, () => ({
         capture() {},
       }));
 
-      return <div data-testid="mirror-stage" />;
+      return <div data-testid="mirror-stage" data-camera-enabled={String(cameraEnabled)} />;
     });
 
     render(<MirrorPage StageComponent={FakeStage} />);
 
     expect(queryScreensaverVideo()).not.toBeInTheDocument();
+    expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-camera-enabled', 'true');
 
     act(() => {
-      vi.advanceTimersByTime(59_999);
+      vi.advanceTimersByTime(299_999);
     });
     expect(queryScreensaverVideo()).not.toBeInTheDocument();
 
@@ -248,9 +252,16 @@ describe('MirrorPage', () => {
       vi.advanceTimersByTime(1);
     });
     expect(queryScreensaverVideo()).toBeInTheDocument();
+    expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-camera-enabled', 'false');
+
+    act(() => {
+      vi.advanceTimersByTime(300_000);
+    });
+    expect(queryScreensaverVideo()).not.toBeInTheDocument();
+    expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-camera-enabled', 'true');
   });
 
-  it('hides the screensaver when a subject is detected again', () => {
+  it('keeps the screensaver alternation independent from subject detection', () => {
     vi.useFakeTimers();
     let subjectDetected = false;
     const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(
@@ -277,13 +288,18 @@ describe('MirrorPage', () => {
     const { rerender } = render(<MirrorPage StageComponent={FakeStage} />);
 
     act(() => {
-      vi.advanceTimersByTime(60_000);
+      vi.advanceTimersByTime(300_000);
     });
     expect(queryScreensaverVideo()).toBeInTheDocument();
 
     subjectDetected = true;
     rerender(<MirrorPage StageComponent={FakeStage} />);
 
+    expect(queryScreensaverVideo()).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(300_000);
+    });
     expect(queryScreensaverVideo()).not.toBeInTheDocument();
   });
 });
