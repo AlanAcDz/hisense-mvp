@@ -8,8 +8,6 @@ import {
   useState,
 } from 'react';
 import {
-  drawArmOcclusionLayer,
-  drawArmOcclusionMaskLayer,
   drawBackgroundLayer,
   drawForegroundLayer,
   drawStageForegroundLayer,
@@ -20,8 +18,6 @@ import {
 import {
   composeCaptureFrame,
   downloadDataUrl,
-  drawCaptureLayers,
-  drawIsolatedRendererLayer,
 } from '@/lib/mirror/capture/compose-capture';
 import {
   BACKGROUND_LAYER_INTERVAL_MS,
@@ -40,27 +36,12 @@ import {
   type RobustVideoMattingOptions,
 } from '@/lib/mirror/matting/use-robust-video-matting';
 import { drawPoseOverlay } from '@/lib/mirror/pose/drawing';
-import { computeRigPose, computeTorsoTransform, getCoverLayout } from '@/lib/mirror/pose/torso';
+import { computeTorsoTransform, getCoverLayout } from '@/lib/mirror/pose/torso';
 import {
   usePoseLandmarker,
   type PoseLandmarkerOptions,
 } from '@/lib/mirror/pose/use-pose-landmarker';
-import { ShirtSceneController } from '@/lib/mirror/three/shirt-scene';
 import type { MirrorSceneState, StageSize } from '@/lib/mirror/types';
-
-type ShirtSceneControllerRuntime = Pick<
-  ShirtSceneController,
-  | 'canvas'
-  | 'dispose'
-  | 'loadShirtModel'
-  | 'render'
-  | 'resize'
-  | 'setJerseyOpacity'
-  | 'updateRigPose'
-  | 'updateShirtTransform'
->;
-
-const DEFAULT_CREATE_SCENE_CONTROLLER = () => new ShirtSceneController();
 const BACKGROUND_VIDEO_LOOP_GUARD_SECONDS = 1 / 24;
 const BACKGROUND_VIDEO_LOOP_START_SECONDS = 0.001;
 const BACKGROUND_VIDEO_LOOP_HOLD_MS = 40;
@@ -70,12 +51,10 @@ export interface MirrorStageHandle {
 }
 
 export interface MirrorStageProps {
-  jerseyOpacity: number;
   showPosePoints: boolean;
   poseLandmarkerOptions?: PoseLandmarkerOptions;
   onStatusChange?: (status: string | null) => void;
   onSubjectDetectedChange?: (detected: boolean) => void;
-  createSceneController?: () => ShirtSceneControllerRuntime;
   usePoseLandmarkerRuntime?: (options?: PoseLandmarkerOptions) => Pick<
     ReturnType<typeof usePoseLandmarker>,
     'detectFrame' | 'error' | 'isLoading'
@@ -225,27 +204,20 @@ async function requestPreferredCameraResolution(stream: MediaStream) {
 
 export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function MirrorStage(
   {
-    jerseyOpacity,
     showPosePoints,
     poseLandmarkerOptions,
     onStatusChange,
     onSubjectDetectedChange,
-    createSceneController = DEFAULT_CREATE_SCENE_CONTROLLER,
     usePoseLandmarkerRuntime = usePoseLandmarker,
     useVideoMattingRuntime = useRobustVideoMatting,
   },
   ref
 ) {
   const stageRef = useRef<HTMLDivElement>(null);
-  const shirtLayerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const backgroundCanvasRef = useRef<HTMLCanvasElement>(null);
   const foregroundCanvasRef = useRef<HTMLCanvasElement>(null);
-  const armOverlayCanvasRef = useRef<HTMLCanvasElement>(null);
-  const armMaskCanvasRef = useRef<HTMLCanvasElement>(null);
   const poseCanvasRef = useRef<HTMLCanvasElement>(null);
-  const displayCanvasRef = useRef<HTMLCanvasElement>(null);
-  const shirtScratchCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const lastDetectAtRef = useRef(0);
@@ -255,7 +227,6 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   const poseOverlayWasVisibleRef = useRef(false);
   const renderFpsRef = useRef({ frames: 0, lastUpdatedAt: 0 });
   const subjectDetectedRef = useRef(false);
-  const sceneControllerRef = useRef<ShirtSceneControllerRuntime | null>(null);
   const backgroundVideoRef = useRef<HTMLVideoElement | null>(null);
   const hasBackgroundVideoFrameRef = useRef(false);
   const backgroundVideoHoldUntilRef = useRef(0);
@@ -266,8 +237,6 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
     cameraError: null,
     poseError: null,
     poseModelLoading: true,
-    shirtAssetLoading: true,
-    shirtAssetError: null,
     backgroundMode: 'loading',
     backgroundGuidance: null,
   });
@@ -299,8 +268,6 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       (mattingModelLoading ? 'Loading video matting model...' : null) ??
       mattingError ??
       sceneState.poseError ??
-      (sceneState.shirtAssetLoading ? 'Loading jersey assets...' : null) ??
-      sceneState.shirtAssetError ??
       (sceneState.backgroundMode === 'loading' ? 'Loading background replacement...' : null) ??
       (sceneState.backgroundMode === 'paused' ? sceneState.backgroundGuidance : null) ??
       null,
@@ -313,8 +280,6 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       sceneState.cameraError,
       sceneState.backgroundGuidance,
       sceneState.poseError,
-      sceneState.shirtAssetError,
-      sceneState.shirtAssetLoading,
     ]
   );
 
@@ -388,44 +353,6 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   }, []);
 
   useEffect(() => {
-    let mounted = true;
-
-    const controller = createSceneController();
-    sceneControllerRef.current = controller;
-
-    if (shirtLayerRef.current) {
-      controller.canvas.className = 'absolute inset-0 h-full w-full pointer-events-none';
-      shirtLayerRef.current.appendChild(controller.canvas);
-    }
-
-    async function loadShirt() {
-      const result = await controller.loadShirtModel();
-      if (!mounted) {
-        return;
-      }
-
-      setSceneState((previous) => ({
-        ...previous,
-        shirtAssetLoading: false,
-        shirtAssetError: result.errorMessage,
-      }));
-    }
-
-    void loadShirt();
-
-    return () => {
-      mounted = false;
-      controller.dispose();
-      controller.canvas.remove();
-      sceneControllerRef.current = null;
-    };
-  }, [createSceneController]);
-
-  useEffect(() => {
-    sceneControllerRef.current?.setJerseyOpacity(jerseyOpacity);
-  }, [jerseyOpacity]);
-
-  useEffect(() => {
     setSceneState((previous) => ({
       ...previous,
       poseModelLoading,
@@ -486,22 +413,14 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   }, []);
 
   useEffect(() => {
-    const controller = sceneControllerRef.current;
     const backgroundCanvas = backgroundCanvasRef.current;
     const foregroundCanvas = foregroundCanvasRef.current;
-    const armOverlayCanvas = armOverlayCanvasRef.current;
-    const armMaskCanvas = armMaskCanvasRef.current;
     const poseCanvas = poseCanvasRef.current;
-    const displayCanvas = displayCanvasRef.current;
 
     if (
-      !controller ||
       !backgroundCanvas ||
       !foregroundCanvas ||
-      !armOverlayCanvas ||
-      !armMaskCanvas ||
       !poseCanvas ||
-      !displayCanvas ||
       !stageSize.width ||
       !stageSize.height
     ) {
@@ -512,41 +431,21 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
     backgroundCanvas.height = stageSize.height;
     foregroundCanvas.width = stageSize.width;
     foregroundCanvas.height = stageSize.height;
-    armOverlayCanvas.width = stageSize.width;
-    armOverlayCanvas.height = stageSize.height;
-    armMaskCanvas.width = stageSize.width;
-    armMaskCanvas.height = stageSize.height;
     poseCanvas.width = stageSize.width;
     poseCanvas.height = stageSize.height;
-    displayCanvas.width = stageSize.width;
-    displayCanvas.height = stageSize.height;
-    if (!shirtScratchCanvasRef.current) {
-      shirtScratchCanvasRef.current = document.createElement('canvas');
-    }
-    shirtScratchCanvasRef.current.width = stageSize.width;
-    shirtScratchCanvasRef.current.height = stageSize.height;
-    controller.resize(stageSize);
   }, [stageSize]);
 
   useEffect(() => {
-    const controller = sceneControllerRef.current;
     const videoElement = videoRef.current;
     const backgroundCanvas = backgroundCanvasRef.current;
     const foregroundCanvas = foregroundCanvasRef.current;
-    const armOverlayCanvas = armOverlayCanvasRef.current;
-    const armMaskCanvas = armMaskCanvasRef.current;
     const poseCanvas = poseCanvasRef.current;
-    const displayCanvas = displayCanvasRef.current;
 
     if (
-      !controller ||
       !videoElement ||
       !backgroundCanvas ||
       !foregroundCanvas ||
-      !armOverlayCanvas ||
-      !armMaskCanvas ||
       !poseCanvas ||
-      !displayCanvas ||
       !stageSize.width ||
       !stageSize.height
     ) {
@@ -555,17 +454,11 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
 
     const backgroundContext = backgroundCanvas.getContext('2d');
     const foregroundContext = foregroundCanvas.getContext('2d');
-    const armOverlayContext = armOverlayCanvas.getContext('2d');
-    const armMaskContext = armMaskCanvas.getContext('2d');
     const poseContext = poseCanvas.getContext('2d');
-    const displayContext = displayCanvas.getContext('2d');
     if (
       !backgroundContext ||
       !foregroundContext ||
-      !armOverlayContext ||
-      !armMaskContext ||
-      !poseContext ||
-      !displayContext
+      !poseContext
     ) {
       return;
     }
@@ -581,46 +474,30 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       updateRenderFps(now);
 
       const currentVideo = videoRef.current;
-      const currentController = sceneControllerRef.current;
       const currentBackgroundCanvas = backgroundCanvasRef.current;
       const currentForegroundCanvas = foregroundCanvasRef.current;
-      const currentArmOverlayCanvas = armOverlayCanvasRef.current;
-      const currentArmMaskCanvas = armMaskCanvasRef.current;
       const currentPoseCanvas = poseCanvasRef.current;
-      const currentDisplayCanvas = displayCanvasRef.current;
 
       if (
         !currentVideo ||
-        !currentController ||
         !currentBackgroundCanvas ||
         !currentForegroundCanvas ||
-        !currentArmOverlayCanvas ||
-        !currentArmMaskCanvas ||
-        !currentPoseCanvas ||
-        !currentDisplayCanvas
+        !currentPoseCanvas
       ) {
         return;
       }
 
       const currentBackgroundContext = backgroundContext;
       const currentForegroundContext = foregroundContext;
-      const currentArmOverlayContext = armOverlayContext;
-      const currentArmMaskContext = armMaskContext;
       const currentPoseContext = poseContext;
-      const currentDisplayContext = displayContext;
 
       if (!currentVideo.videoWidth || !currentVideo.videoHeight) {
         syncSubjectDetected(false);
         clearCanvas(currentBackgroundCanvas, stageSize);
         clearCanvas(currentForegroundCanvas, stageSize);
-        clearCanvas(currentArmOverlayCanvas, stageSize);
-        clearCanvas(currentArmMaskCanvas, stageSize);
         lastBackgroundLayerAtRef.current = 0;
         currentPoseContext.clearRect(0, 0, stageSize.width, stageSize.height);
         poseOverlayWasVisibleRef.current = false;
-        currentDisplayContext.clearRect(0, 0, stageSize.width, stageSize.height);
-        currentController.updateShirtTransform(null);
-        currentController.updateRigPose(null);
 
         setSceneState((previous) =>
           previous.backgroundMode === 'loading' && previous.backgroundGuidance === null
@@ -632,13 +509,6 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
               }
         );
 
-        currentController.render();
-        drawIsolatedRendererLayer(currentDisplayContext, {
-          rendererCanvas: currentController.canvas,
-          shirtCutoutMaskCanvas: currentArmMaskCanvas,
-          outputWidth: stageSize.width,
-          outputHeight: stageSize.height,
-        });
         animationFrameRef.current = window.requestAnimationFrame(renderFrame);
         return;
       }
@@ -677,10 +547,6 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
 
       const torsoTransform = computeTorsoTransform(nextPoseFrame, stageSize, coverLayout);
       syncSubjectDetected(Boolean(torsoTransform));
-      currentController.updateShirtTransform(torsoTransform);
-      currentController.updateRigPose(
-        computeRigPose(nextPoseFrame, torsoTransform, stageSize, coverLayout)
-      );
 
       const backgroundMatte = VIDEO_MATTING_ENABLED
         ? {
@@ -752,22 +618,6 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
             maskCanvas: foregroundMaskCanvas,
           });
         }
-        drawArmOcclusionLayer({
-          ctx: currentArmOverlayContext,
-          coverLayout,
-          stageSize,
-          source: currentForegroundCanvas,
-          sourceSpace: 'stage',
-          poseFrame: nextPoseFrame,
-          debug: showPosePoints,
-        });
-        drawArmOcclusionMaskLayer({
-          ctx: currentArmMaskContext,
-          coverLayout,
-          stageSize,
-          poseFrame: nextPoseFrame,
-          clipCanvas: currentForegroundCanvas,
-        });
 
         setSceneState((previous) =>
           previous.backgroundMode === 'active' && previous.backgroundGuidance === null
@@ -781,8 +631,6 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       } else {
         currentBackgroundContext.clearRect(0, 0, stageSize.width, stageSize.height);
         lastBackgroundLayerAtRef.current = 0;
-        clearCanvas(currentArmOverlayCanvas, stageSize);
-        clearCanvas(currentArmMaskCanvas, stageSize);
         drawForegroundLayer({
           ctx: currentForegroundContext,
           coverLayout,
@@ -807,13 +655,6 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         );
       }
 
-      currentController.render();
-      drawIsolatedRendererLayer(currentDisplayContext, {
-        rendererCanvas: currentController.canvas,
-        shirtCutoutMaskCanvas: currentArmMaskCanvas,
-        outputWidth: stageSize.width,
-        outputHeight: stageSize.height,
-      });
       animationFrameRef.current = window.requestAnimationFrame(renderFrame);
     };
 
@@ -833,25 +674,17 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       capture() {
         const backgroundCanvas = backgroundCanvasRef.current;
         const foregroundCanvas = foregroundCanvasRef.current;
-        const armOverlayCanvas = armOverlayCanvasRef.current;
-        const armMaskCanvas = armMaskCanvasRef.current;
         const poseCanvas = poseCanvasRef.current;
-        const controller = sceneControllerRef.current;
-        const rendererCanvas = controller?.canvas;
 
-        if (!foregroundCanvas || !rendererCanvas || !stageSize.width || !stageSize.height) {
+        if (!foregroundCanvas || !stageSize.width || !stageSize.height) {
           return;
         }
 
         const outputWidth = Math.round(stageSize.width * Math.min(window.devicePixelRatio || 1, 2));
         const outputHeight = Math.round(stageSize.height * Math.min(window.devicePixelRatio || 1, 2));
-        controller.render();
         const dataUrl = composeCaptureFrame({
           backgroundCanvas,
           foregroundCanvas,
-          rendererCanvas,
-          shirtCutoutMaskCanvas: armMaskCanvas,
-          armOverlayCanvas,
           poseCanvas,
           outputWidth,
           outputHeight,
@@ -879,22 +712,9 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         ref={foregroundCanvasRef}
         className="pointer-events-none absolute inset-0 z-10 h-full w-full"
       />
-      <div ref={shirtLayerRef} className="hidden" />
-      <canvas
-        ref={armOverlayCanvasRef}
-        className="pointer-events-none absolute inset-0 z-30 h-full w-full"
-      />
-      <canvas
-        ref={armMaskCanvasRef}
-        className="hidden"
-      />
       <canvas
         ref={poseCanvasRef}
         className="pointer-events-none absolute inset-0 z-40 h-full w-full"
-      />
-      <canvas
-        ref={displayCanvasRef}
-        className="pointer-events-none absolute inset-0 z-20 h-full w-full"
       />
       {import.meta.env.DEV ? (
         <div

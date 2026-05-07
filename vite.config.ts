@@ -28,7 +28,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         navigateFallback: 'index.html',
         maximumFileSizeToCacheInBytes: 35 * 1024 * 1024,
-        globPatterns: ['**/*.{html,js,css,png,jpg,jpeg,svg,ico,webmanifest,woff2,glb,wasm,task,json,bin}'],
+        globPatterns: ['**/*.{html,js,css,png,jpg,jpeg,svg,ico,webmanifest,woff2,wasm,task,json,bin}'],
         globIgnores: [
           '**/.DS_Store',
           '**/README.md',
@@ -42,21 +42,6 @@ export default defineConfig({
             options: {
               cacheName: 'background-videos',
               rangeRequests: true,
-              cacheableResponse: {
-                statuses: [200],
-              },
-              expiration: {
-                maxEntries: 8,
-                maxAgeSeconds: 30 * 24 * 60 * 60,
-              },
-            },
-          },
-          {
-            urlPattern: ({ url }) =>
-              url.pathname.includes('/assets/models/') && url.pathname.endsWith('.glb'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'models-glb',
               cacheableResponse: {
                 statuses: [200],
               },

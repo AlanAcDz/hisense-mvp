@@ -1,7 +1,7 @@
 import { composeCaptureFrame } from '@/lib/mirror/capture/compose-capture';
 
 describe('composeCaptureFrame', () => {
-  it('composes layers in background, user, shirt, arm overlay, pose order', () => {
+  it('composes mirror captures with only background, user, and pose layers', () => {
     const createElement = document.createElement.bind(document);
     const drawOrder: string[] = [];
     const outputCanvas = createElement('canvas');
@@ -31,18 +31,12 @@ describe('composeCaptureFrame', () => {
     backgroundCanvas.dataset.layer = 'background';
     const foregroundCanvas = createElement('canvas');
     foregroundCanvas.dataset.layer = 'foreground';
-    const rendererCanvas = createElement('canvas');
-    rendererCanvas.dataset.layer = 'shirt';
-    const armOverlayCanvas = createElement('canvas');
-    armOverlayCanvas.dataset.layer = 'arm-overlay';
     const poseCanvas = createElement('canvas');
     poseCanvas.dataset.layer = 'pose';
 
     const dataUrl = composeCaptureFrame({
       backgroundCanvas,
       foregroundCanvas,
-      rendererCanvas,
-      armOverlayCanvas,
       poseCanvas,
       outputWidth: 960,
       outputHeight: 540,
@@ -50,7 +44,7 @@ describe('composeCaptureFrame', () => {
     });
 
     expect(dataUrl).toBe('data:image/jpeg;base64,mock');
-    expect(drawOrder).toEqual(['background', 'foreground', 'shirt', 'arm-overlay', 'pose']);
+    expect(drawOrder).toEqual(['background', 'foreground', 'pose']);
 
     createElementSpy.mockRestore();
   });

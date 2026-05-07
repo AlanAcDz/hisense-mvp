@@ -1,82 +1,5 @@
 import type { CaptureCompositionOptions } from '@/lib/mirror/types';
 
-function getScratchContext(
-  scratchCanvas: HTMLCanvasElement | null | undefined,
-  width: number,
-  height: number
-) {
-  const canvas = scratchCanvas ?? document.createElement('canvas');
-  if (canvas.width !== width) {
-    canvas.width = width;
-  }
-  if (canvas.height !== height) {
-    canvas.height = height;
-  }
-
-  return canvas.getContext('2d');
-}
-
-export function drawRendererLayer(
-  ctx: CanvasRenderingContext2D,
-  {
-    rendererCanvas,
-    shirtCutoutMaskCanvas,
-    scratchCanvas,
-    outputWidth,
-    outputHeight,
-  }: Pick<
-    CaptureCompositionOptions,
-    'rendererCanvas' | 'shirtCutoutMaskCanvas' | 'scratchCanvas' | 'outputWidth' | 'outputHeight'
-  >
-) {
-  if (!shirtCutoutMaskCanvas) {
-    ctx.drawImage(rendererCanvas, 0, 0, outputWidth, outputHeight);
-    return;
-  }
-
-  const scratchContext = getScratchContext(scratchCanvas, outputWidth, outputHeight);
-  if (!scratchContext) {
-    ctx.drawImage(rendererCanvas, 0, 0, outputWidth, outputHeight);
-    return;
-  }
-
-  scratchContext.clearRect(0, 0, outputWidth, outputHeight);
-  scratchContext.drawImage(rendererCanvas, 0, 0, outputWidth, outputHeight);
-  scratchContext.save();
-  scratchContext.globalCompositeOperation = 'destination-out';
-  scratchContext.drawImage(shirtCutoutMaskCanvas, 0, 0, outputWidth, outputHeight);
-  scratchContext.restore();
-  scratchContext.globalCompositeOperation = 'source-over';
-
-  ctx.drawImage(scratchContext.canvas, 0, 0, outputWidth, outputHeight);
-}
-
-export function drawIsolatedRendererLayer(
-  ctx: CanvasRenderingContext2D,
-  {
-    rendererCanvas,
-    shirtCutoutMaskCanvas,
-    outputWidth,
-    outputHeight,
-  }: Pick<
-    CaptureCompositionOptions,
-    'rendererCanvas' | 'shirtCutoutMaskCanvas' | 'outputWidth' | 'outputHeight'
-  >
-) {
-  ctx.clearRect(0, 0, outputWidth, outputHeight);
-  ctx.drawImage(rendererCanvas, 0, 0, outputWidth, outputHeight);
-
-  if (!shirtCutoutMaskCanvas) {
-    return;
-  }
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.drawImage(shirtCutoutMaskCanvas, 0, 0, outputWidth, outputHeight);
-  ctx.restore();
-  ctx.globalCompositeOperation = 'source-over';
-}
-
 export function drawCaptureLayers(
   ctx: CanvasRenderingContext2D,
   options: CaptureCompositionOptions
@@ -84,11 +7,7 @@ export function drawCaptureLayers(
   const {
     backgroundCanvas,
     foregroundCanvas,
-    rendererCanvas,
-    shirtCutoutMaskCanvas,
-    armOverlayCanvas,
     poseCanvas,
-    scratchCanvas,
     outputWidth,
     outputHeight,
     showPosePoints,
@@ -102,18 +21,6 @@ export function drawCaptureLayers(
 
   if (foregroundCanvas) {
     ctx.drawImage(foregroundCanvas, 0, 0, outputWidth, outputHeight);
-  }
-
-  drawRendererLayer(ctx, {
-    rendererCanvas,
-    shirtCutoutMaskCanvas,
-    scratchCanvas,
-    outputWidth,
-    outputHeight,
-  });
-
-  if (armOverlayCanvas) {
-    ctx.drawImage(armOverlayCanvas, 0, 0, outputWidth, outputHeight);
   }
 
   if (showPosePoints && poseCanvas) {

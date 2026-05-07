@@ -24,7 +24,7 @@ describe('MirrorPage', () => {
 
   it('renders the mirror immediately and keeps pose points hidden by default', () => {
     const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(
-      { jerseyOpacity, showPosePoints },
+      { showPosePoints },
       ref
     ) {
       useImperativeHandle(ref, () => ({
@@ -34,7 +34,6 @@ describe('MirrorPage', () => {
       return (
         <div
           data-testid="mirror-stage"
-          data-jersey-opacity={String(jerseyOpacity)}
           data-show-points={String(showPosePoints)}
         />
       );
@@ -47,7 +46,6 @@ describe('MirrorPage', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /capturar/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /mostrar puntos de pose/i })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-jersey-opacity', '1');
     expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-show-points', 'false');
   });
 
@@ -127,11 +125,7 @@ describe('MirrorPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /mostrar configuración/i }));
 
     expect(screen.getByRole('button', { name: /mostrar controles completos/i })).toBeInTheDocument();
-    if (import.meta.env.DEV) {
-      expect(screen.getByRole('link', { name: /laboratorio de calibración/i })).toBeInTheDocument();
-    } else {
-      expect(screen.queryByRole('link', { name: /laboratorio de calibración/i })).not.toBeInTheDocument();
-    }
+    expect(screen.queryByRole('link', { name: /laboratorio de calibración/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /capturar/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /mostrar puntos de pose/i })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /modelo/i })).toHaveValue(POSE_MODEL_VARIANT);
@@ -175,7 +169,7 @@ describe('MirrorPage', () => {
   it('forwards capture requests to the live stage handle', () => {
     const captureSpy = vi.fn();
     const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(
-      { jerseyOpacity, showPosePoints },
+      { showPosePoints },
       ref
     ) {
       useImperativeHandle(ref, () => ({
@@ -185,7 +179,6 @@ describe('MirrorPage', () => {
       return (
         <div
           data-testid="mirror-stage"
-          data-jersey-opacity={String(jerseyOpacity)}
           data-show-points={String(showPosePoints)}
         />
       );
@@ -201,7 +194,7 @@ describe('MirrorPage', () => {
   it('keeps the hidden controls usable without rendering runtime status copy', () => {
     const captureSpy = vi.fn();
     const FakeStage = forwardRef<MirrorStageHandle, MirrorStageProps>(function FakeStage(
-      { jerseyOpacity, onStatusChange, showPosePoints },
+      { onStatusChange, showPosePoints },
       ref
     ) {
       useImperativeHandle(ref, () => ({
@@ -215,7 +208,6 @@ describe('MirrorPage', () => {
         <div>
           <div
             data-testid="mirror-stage"
-            data-jersey-opacity={String(jerseyOpacity)}
             data-show-points={String(showPosePoints)}
           />
         </div>
@@ -229,7 +221,6 @@ describe('MirrorPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /capturar/i }));
 
     expect(screen.queryByText(/using proxy sleeves instead/i)).not.toBeInTheDocument();
-    expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-jersey-opacity', '1');
     expect(screen.getByTestId('mirror-stage')).toHaveAttribute('data-show-points', 'true');
     expect(captureSpy).toHaveBeenCalledTimes(1);
   });

@@ -116,8 +116,6 @@ export interface MirrorSceneState {
   cameraError: string | null;
   poseError: string | null;
   poseModelLoading: boolean;
-  shirtAssetLoading: boolean;
-  shirtAssetError: string | null;
   backgroundMode: BackgroundMode;
   backgroundGuidance: string | null;
 }
@@ -125,11 +123,7 @@ export interface MirrorSceneState {
 export interface CaptureCompositionOptions {
   backgroundCanvas: HTMLCanvasElement | null;
   foregroundCanvas: HTMLCanvasElement | null;
-  rendererCanvas: HTMLCanvasElement;
-  shirtCutoutMaskCanvas?: HTMLCanvasElement | null;
-  armOverlayCanvas?: HTMLCanvasElement | null;
   poseCanvas: HTMLCanvasElement | null;
-  scratchCanvas?: HTMLCanvasElement | null;
   outputWidth: number;
   outputHeight: number;
   showPosePoints: boolean;

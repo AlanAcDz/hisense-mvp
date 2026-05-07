@@ -78,7 +78,6 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
     <main className="relative h-dvh w-screen overflow-hidden bg-black">
       <StageComponent
         ref={stageRef}
-        jerseyOpacity={1}
         showPosePoints={showPosePoints}
         poseLandmarkerOptions={{
           modelVariant: poseModelVariant,

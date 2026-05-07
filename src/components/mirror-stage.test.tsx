@@ -1,11 +1,6 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import { MirrorStage } from '@/components/mirror-stage';
-import {
-  computeRigPose,
-  computeTorsoTransform,
-  createPoseFrame,
-  getCoverLayout,
-} from '@/lib/mirror/pose/torso';
+import { createPoseFrame } from '@/lib/mirror/pose/torso';
 import type { LandmarkerFrame, PoseLandmark2D, PoseLandmark3D } from '@/lib/mirror/types';
 
 function buildNormalizedLandmarks(visibility = 0.98) {
@@ -61,15 +56,6 @@ describe('MirrorStage', () => {
   });
   const requestAnimationFrameMock = vi.fn<(callback: FrameRequestCallback) => number>();
   const cancelAnimationFrameMock = vi.fn();
-  const shirtSceneSpies = {
-    dispose: vi.fn(),
-    loadShirtModel: vi.fn().mockResolvedValue({ errorMessage: null, usedFallback: false }),
-    render: vi.fn(),
-    resize: vi.fn(),
-    setJerseyOpacity: vi.fn(),
-    updateRigPose: vi.fn(),
-    updateShirtTransform: vi.fn(),
-  };
   const videoMattingRuntime = () => ({
     detectMattingFrame: () => null,
     error: null,
@@ -181,7 +167,6 @@ describe('MirrorStage', () => {
     queuedFrames = [];
     getUserMediaMock.mockClear();
     getUserMediaMock.mockResolvedValue(createCameraStream());
-    Object.values(shirtSceneSpies).forEach((spy) => spy.mockClear());
 
     requestAnimationFrameMock.mockImplementation((callback) => {
       queuedFrames.push(callback);
@@ -216,18 +201,7 @@ describe('MirrorStage', () => {
 
     render(
       <MirrorStage
-        jerseyOpacity={0.1}
         showPosePoints={false}
-        createSceneController={() => ({
-          canvas: document.createElement('canvas'),
-          dispose: shirtSceneSpies.dispose,
-          loadShirtModel: shirtSceneSpies.loadShirtModel,
-          render: shirtSceneSpies.render,
-          resize: shirtSceneSpies.resize,
-          setJerseyOpacity: shirtSceneSpies.setJerseyOpacity,
-          updateRigPose: shirtSceneSpies.updateRigPose,
-          updateShirtTransform: shirtSceneSpies.updateShirtTransform,
-        })}
         usePoseLandmarkerRuntime={() => ({
           detectFrame: () => ({ poseFrame: null, segmentationFrame: null }),
           error: null,
@@ -242,22 +216,22 @@ describe('MirrorStage', () => {
         audio: false,
         video: {
           facingMode: 'user',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
           frameRate: { ideal: 30 },
         },
       })
     );
     await waitFor(() =>
       expect(applyConstraints).toHaveBeenCalledWith({
-        width: { exact: 1280 },
-        height: { exact: 720 },
+        width: { exact: 1920 },
+        height: { exact: 1080 },
         frameRate: { ideal: 30 },
       })
     );
   });
 
-  it('shows paused guidance while keeping shirt tracking active', async () => {
+  it('shows paused guidance when background replacement lacks a matte', async () => {
     const poseFrame = createPoseFrame(buildNormalizedLandmarks(), buildWorldLandmarks(), 1000);
     const landmarkerFrame: LandmarkerFrame = {
       poseFrame,
@@ -267,19 +241,8 @@ describe('MirrorStage', () => {
 
     render(
       <MirrorStage
-        jerseyOpacity={0.1}
         showPosePoints={false}
         onStatusChange={onStatusChange}
-        createSceneController={() => ({
-          canvas: document.createElement('canvas'),
-          dispose: shirtSceneSpies.dispose,
-          loadShirtModel: shirtSceneSpies.loadShirtModel,
-          render: shirtSceneSpies.render,
-          resize: shirtSceneSpies.resize,
-          setJerseyOpacity: shirtSceneSpies.setJerseyOpacity,
-          updateRigPose: shirtSceneSpies.updateRigPose,
-          updateShirtTransform: shirtSceneSpies.updateShirtTransform,
-        })}
         usePoseLandmarkerRuntime={() => ({
           detectFrame: () => landmarkerFrame,
           error: null,
@@ -294,57 +257,6 @@ describe('MirrorStage', () => {
     flushNextFrame();
 
     expect(onStatusChange).toHaveBeenCalledWith(expect.stringMatching(/improve lighting/i));
-    expect(shirtSceneSpies.setJerseyOpacity).toHaveBeenCalledWith(0.1);
-    expect(
-      shirtSceneSpies.updateShirtTransform.mock.calls.some(([transform]) => Boolean(transform))
-    ).toBe(true);
-  });
-
-  it('computes and forwards the live rig pose', async () => {
-    const poseFrame = createPoseFrame(buildNormalizedLandmarks(), buildWorldLandmarks(), 1000);
-    const landmarkerFrame: LandmarkerFrame = {
-      poseFrame,
-      segmentationFrame: null,
-    };
-
-    render(
-      <MirrorStage
-        jerseyOpacity={0.1}
-        showPosePoints={false}
-        createSceneController={() => ({
-          canvas: document.createElement('canvas'),
-          dispose: shirtSceneSpies.dispose,
-          loadShirtModel: shirtSceneSpies.loadShirtModel,
-          render: shirtSceneSpies.render,
-          resize: shirtSceneSpies.resize,
-          setJerseyOpacity: shirtSceneSpies.setJerseyOpacity,
-          updateRigPose: shirtSceneSpies.updateRigPose,
-          updateShirtTransform: shirtSceneSpies.updateShirtTransform,
-        })}
-        usePoseLandmarkerRuntime={() => ({
-          detectFrame: () => landmarkerFrame,
-          error: null,
-          isLoading: false,
-        })}
-        useVideoMattingRuntime={videoMattingRuntime}
-      />
-    );
-
-    await waitFor(() => expect(getUserMediaMock).toHaveBeenCalledTimes(1));
-    await act(async () => {});
-    flushNextFrame();
-
-    const stageSize = { width: 960, height: 540 };
-    const coverLayout = getCoverLayout({ width: 1280, height: 720 }, stageSize);
-    const torsoTransform = computeTorsoTransform(poseFrame, stageSize, coverLayout);
-
-    expect(torsoTransform).not.toBeNull();
-
-    const expectedRigPose = computeRigPose(poseFrame, torsoTransform, stageSize, coverLayout);
-    const rigCall = shirtSceneSpies.updateRigPose.mock.calls.find(([rigPose]) => Boolean(rigPose));
-
-    expect(rigCall).toBeTruthy();
-    expect(rigCall?.[0]).toEqual(expectedRigPose);
   });
 
   it('notifies when subject detection changes', async () => {
@@ -356,19 +268,8 @@ describe('MirrorStage', () => {
 
     render(
       <MirrorStage
-        jerseyOpacity={0.1}
         showPosePoints={false}
         onSubjectDetectedChange={onSubjectDetectedChange}
-        createSceneController={() => ({
-          canvas: document.createElement('canvas'),
-          dispose: shirtSceneSpies.dispose,
-          loadShirtModel: shirtSceneSpies.loadShirtModel,
-          render: shirtSceneSpies.render,
-          resize: shirtSceneSpies.resize,
-          setJerseyOpacity: shirtSceneSpies.setJerseyOpacity,
-          updateRigPose: shirtSceneSpies.updateRigPose,
-          updateShirtTransform: shirtSceneSpies.updateShirtTransform,
-        })}
         usePoseLandmarkerRuntime={() => ({
           detectFrame: () => landmarkerFrame,
           error: null,

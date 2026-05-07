@@ -148,14 +148,6 @@ export function MirrorControlsLip({
           <section
             className="pointer-events-auto ml-2 flex w-[min(21rem,calc(100vw-2.5rem))] flex-col gap-3 rounded-l-[1.75rem] border border-r-0 border-white/14 bg-[linear-gradient(180deg,rgba(7,20,34,0.82)_0%,rgba(4,12,20,0.94)_100%)] px-4 py-4 shadow-[0_24px_54px_rgba(0,0,0,0.34)] backdrop-blur-xl sm:px-5"
             aria-label="Controles de espejo">
-            {import.meta.env.DEV ? (
-              <a
-                href={`${import.meta.env.BASE_URL}calibration`}
-                className="rounded-full border border-white/14 bg-white/7 px-5 py-3 text-center text-xs font-semibold uppercase tracking-[0.16em] text-white/92 transition hover:border-cyan-200/40 hover:bg-cyan-300/10">
-                Laboratorio de calibración
-              </a>
-            ) : null}
-
             <div className="rounded-2xl border border-cyan-200/18 bg-cyan-300/10 px-4 py-3 text-white">
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-cyan-100/68">
                 Detecciones
