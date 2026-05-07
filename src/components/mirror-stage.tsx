@@ -21,8 +21,10 @@ import {
   composeCaptureFrame,
   downloadDataUrl,
   drawCaptureLayers,
+  drawIsolatedRendererLayer,
 } from '@/lib/mirror/capture/compose-capture';
 import {
+  BACKGROUND_LAYER_INTERVAL_MS,
   BACKGROUND_VIDEO_ASSET_URL,
   CAMERA_CAPTURE_FRAME_RATE,
   CAMERA_CAPTURE_HEIGHT_PX,
@@ -249,6 +251,8 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
   const lastDetectAtRef = useRef(0);
   const lastMattingDetectAtRef = useRef(0);
   const lastRenderAtRef = useRef(0);
+  const lastBackgroundLayerAtRef = useRef(0);
+  const poseOverlayWasVisibleRef = useRef(false);
   const renderFpsRef = useRef({ frames: 0, lastUpdatedAt: 0 });
   const subjectDetectedRef = useRef(false);
   const sceneControllerRef = useRef<ShirtSceneControllerRuntime | null>(null);
@@ -611,7 +615,9 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         clearCanvas(currentForegroundCanvas, stageSize);
         clearCanvas(currentArmOverlayCanvas, stageSize);
         clearCanvas(currentArmMaskCanvas, stageSize);
+        lastBackgroundLayerAtRef.current = 0;
         currentPoseContext.clearRect(0, 0, stageSize.width, stageSize.height);
+        poseOverlayWasVisibleRef.current = false;
         currentDisplayContext.clearRect(0, 0, stageSize.width, stageSize.height);
         currentController.updateShirtTransform(null);
         currentController.updateRigPose(null);
@@ -627,17 +633,11 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         );
 
         currentController.render();
-        drawCaptureLayers(currentDisplayContext, {
-          backgroundCanvas: currentBackgroundCanvas,
-          foregroundCanvas: currentForegroundCanvas,
+        drawIsolatedRendererLayer(currentDisplayContext, {
           rendererCanvas: currentController.canvas,
           shirtCutoutMaskCanvas: currentArmMaskCanvas,
-          armOverlayCanvas: currentArmOverlayCanvas,
-          poseCanvas: currentPoseCanvas,
-          scratchCanvas: shirtScratchCanvasRef.current,
           outputWidth: stageSize.width,
           outputHeight: stageSize.height,
-          showPosePoints,
         });
         animationFrameRef.current = window.requestAnimationFrame(renderFrame);
         return;
@@ -657,20 +657,23 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         stageSize,
       });
       const nextSegmentationFrame = VIDEO_MATTING_ENABLED ? null : nextFrame.segmentationFrame;
+      const nextMattingFrameIsFresh = Boolean(
+        VIDEO_MATTING_ENABLED &&
+        nextMattingFrame &&
+        now - nextMattingFrame.timestamp <= VIDEO_MATTING_STALE_MS
+      );
       const nextMattingMaskCanvas =
-        VIDEO_MATTING_ENABLED &&
-        nextMattingFrame &&
-        now - nextMattingFrame.timestamp <= VIDEO_MATTING_STALE_MS
-          ? nextMattingFrame.maskCanvas
-          : null;
+        nextMattingFrameIsFresh && nextMattingFrame ? nextMattingFrame.maskCanvas : null;
       const nextMattingSourceCanvas =
-        VIDEO_MATTING_ENABLED &&
-        nextMattingFrame &&
-        now - nextMattingFrame.timestamp <= VIDEO_MATTING_STALE_MS
-          ? nextMattingFrame.sourceCanvas
-          : null;
+        nextMattingFrameIsFresh && nextMattingFrame ? nextMattingFrame.sourceCanvas : null;
 
-      drawPoseOverlay(currentPoseContext, nextPoseFrame, stageSize, coverLayout, showPosePoints);
+      if (showPosePoints) {
+        drawPoseOverlay(currentPoseContext, nextPoseFrame, stageSize, coverLayout, true);
+        poseOverlayWasVisibleRef.current = true;
+      } else if (poseOverlayWasVisibleRef.current) {
+        currentPoseContext.clearRect(0, 0, stageSize.width, stageSize.height);
+        poseOverlayWasVisibleRef.current = false;
+      }
 
       const torsoTransform = computeTorsoTransform(nextPoseFrame, stageSize, coverLayout);
       syncSubjectDetected(Boolean(torsoTransform));
@@ -713,21 +716,27 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         foregroundSource = currentVideo;
       }
 
-      if (torsoTransform && foregroundMaskCanvas) {
+      if (torsoTransform && (foregroundMaskCanvas || nextMattingSourceCanvas)) {
         if (
-          canDrawBackgroundVideoFrame(
-            backgroundVideoRef.current,
-            now,
-            backgroundVideoHoldUntilRef
-          )
+          !lastBackgroundLayerAtRef.current ||
+          now - lastBackgroundLayerAtRef.current >= BACKGROUND_LAYER_INTERVAL_MS
         ) {
-          drawBackgroundLayer(currentBackgroundContext, stageSize, backgroundVideoRef.current);
-          hasBackgroundVideoFrameRef.current = true;
-        } else if (!hasBackgroundVideoFrameRef.current) {
-          drawBackgroundLayer(currentBackgroundContext, stageSize, null);
+          if (
+            canDrawBackgroundVideoFrame(
+              backgroundVideoRef.current,
+              now,
+              backgroundVideoHoldUntilRef
+            )
+          ) {
+            drawBackgroundLayer(currentBackgroundContext, stageSize, backgroundVideoRef.current);
+            hasBackgroundVideoFrameRef.current = true;
+          } else if (!hasBackgroundVideoFrameRef.current) {
+            drawBackgroundLayer(currentBackgroundContext, stageSize, null);
+          }
+          lastBackgroundLayerAtRef.current = now;
         }
 
-        if (nextMattingSourceCanvas && nextMattingMaskCanvas) {
+        if (nextMattingSourceCanvas) {
           drawStageForegroundLayer({
             ctx: currentForegroundContext,
             stageSize,
@@ -771,6 +780,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         );
       } else {
         currentBackgroundContext.clearRect(0, 0, stageSize.width, stageSize.height);
+        lastBackgroundLayerAtRef.current = 0;
         clearCanvas(currentArmOverlayCanvas, stageSize);
         clearCanvas(currentArmMaskCanvas, stageSize);
         drawForegroundLayer({
@@ -782,7 +792,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
 
         const guidance = getBackgroundGuidance(
           Boolean(torsoTransform),
-          Boolean(nextMattingMaskCanvas || nextSegmentationFrame),
+          Boolean(nextMattingSourceCanvas || nextMattingMaskCanvas || nextSegmentationFrame),
           backgroundMatte.reusedPrevious
         );
 
@@ -798,17 +808,11 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       }
 
       currentController.render();
-      drawCaptureLayers(currentDisplayContext, {
-        backgroundCanvas: currentBackgroundCanvas,
-        foregroundCanvas: currentForegroundCanvas,
+      drawIsolatedRendererLayer(currentDisplayContext, {
         rendererCanvas: currentController.canvas,
         shirtCutoutMaskCanvas: currentArmMaskCanvas,
-        armOverlayCanvas: currentArmOverlayCanvas,
-        poseCanvas: currentPoseCanvas,
-        scratchCanvas: shirtScratchCanvasRef.current,
         outputWidth: stageSize.width,
         outputHeight: stageSize.height,
-        showPosePoints,
       });
       animationFrameRef.current = window.requestAnimationFrame(renderFrame);
     };
@@ -832,7 +836,8 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
         const armOverlayCanvas = armOverlayCanvasRef.current;
         const armMaskCanvas = armMaskCanvasRef.current;
         const poseCanvas = poseCanvasRef.current;
-        const rendererCanvas = sceneControllerRef.current?.canvas;
+        const controller = sceneControllerRef.current;
+        const rendererCanvas = controller?.canvas;
 
         if (!foregroundCanvas || !rendererCanvas || !stageSize.width || !stageSize.height) {
           return;
@@ -840,6 +845,7 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
 
         const outputWidth = Math.round(stageSize.width * Math.min(window.devicePixelRatio || 1, 2));
         const outputHeight = Math.round(stageSize.height * Math.min(window.devicePixelRatio || 1, 2));
+        controller.render();
         const dataUrl = composeCaptureFrame({
           backgroundCanvas,
           foregroundCanvas,
@@ -867,28 +873,28 @@ export const MirrorStage = forwardRef<MirrorStageHandle, MirrorStageProps>(funct
       <video ref={videoRef} className="hidden" autoPlay muted playsInline />
       <canvas
         ref={backgroundCanvasRef}
-        className="pointer-events-none absolute inset-0 z-0 h-full w-full opacity-0"
+        className="pointer-events-none absolute inset-0 z-0 h-full w-full"
       />
       <canvas
         ref={foregroundCanvasRef}
-        className="pointer-events-none absolute inset-0 z-10 h-full w-full opacity-0"
+        className="pointer-events-none absolute inset-0 z-10 h-full w-full"
       />
-      <div ref={shirtLayerRef} className="pointer-events-none absolute inset-0 z-20 opacity-0" />
+      <div ref={shirtLayerRef} className="hidden" />
       <canvas
         ref={armOverlayCanvasRef}
-        className="pointer-events-none absolute inset-0 z-30 h-full w-full opacity-0"
+        className="pointer-events-none absolute inset-0 z-30 h-full w-full"
       />
       <canvas
         ref={armMaskCanvasRef}
-        className="pointer-events-none absolute inset-0 z-30 h-full w-full opacity-0"
+        className="hidden"
       />
       <canvas
         ref={poseCanvasRef}
-        className="pointer-events-none absolute inset-0 z-40 h-full w-full opacity-0"
+        className="pointer-events-none absolute inset-0 z-40 h-full w-full"
       />
       <canvas
         ref={displayCanvasRef}
-        className="pointer-events-none absolute inset-0 z-50 h-full w-full"
+        className="pointer-events-none absolute inset-0 z-20 h-full w-full"
       />
       {import.meta.env.DEV ? (
         <div

@@ -28,6 +28,7 @@ import {
   JERSEY_RIGGED_MODEL_URL,
   RIG_CALIBRATION,
   SHIRT_CALIBRATION,
+  SHIRT_RENDER_PIXEL_RATIO,
 } from '@/lib/mirror/constants';
 import { smoothQuaternion, smoothVector3 } from '@/lib/mirror/pose/smoothing';
 import type {
@@ -106,7 +107,8 @@ export class ShirtSceneController {
     this.renderer = new WebGLRenderer({
       alpha: true,
       antialias: true,
-      preserveDrawingBuffer: true,
+      powerPreference: 'high-performance',
+      preserveDrawingBuffer: false,
     });
     this.renderer.setClearColor(0x000000, 0);
 
@@ -167,7 +169,7 @@ export class ShirtSceneController {
     this.camera.bottom = -stageSize.height / 2;
     this.camera.updateProjectionMatrix();
 
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, SHIRT_RENDER_PIXEL_RATIO));
     this.renderer.setSize(stageSize.width, stageSize.height, false);
   }
 

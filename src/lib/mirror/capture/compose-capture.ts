@@ -16,7 +16,7 @@ function getScratchContext(
   return canvas.getContext('2d');
 }
 
-function drawRendererLayer(
+export function drawRendererLayer(
   ctx: CanvasRenderingContext2D,
   {
     rendererCanvas,
@@ -49,6 +49,32 @@ function drawRendererLayer(
   scratchContext.globalCompositeOperation = 'source-over';
 
   ctx.drawImage(scratchContext.canvas, 0, 0, outputWidth, outputHeight);
+}
+
+export function drawIsolatedRendererLayer(
+  ctx: CanvasRenderingContext2D,
+  {
+    rendererCanvas,
+    shirtCutoutMaskCanvas,
+    outputWidth,
+    outputHeight,
+  }: Pick<
+    CaptureCompositionOptions,
+    'rendererCanvas' | 'shirtCutoutMaskCanvas' | 'outputWidth' | 'outputHeight'
+  >
+) {
+  ctx.clearRect(0, 0, outputWidth, outputHeight);
+  ctx.drawImage(rendererCanvas, 0, 0, outputWidth, outputHeight);
+
+  if (!shirtCutoutMaskCanvas) {
+    return;
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.drawImage(shirtCutoutMaskCanvas, 0, 0, outputWidth, outputHeight);
+  ctx.restore();
+  ctx.globalCompositeOperation = 'source-over';
 }
 
 export function drawCaptureLayers(

@@ -51,7 +51,7 @@ interface DrawStageForegroundLayerOptions {
   ctx: CanvasRenderingContext2D;
   stageSize: StageSize;
   source: CanvasImageSource;
-  maskCanvas: HTMLCanvasElement;
+  maskCanvas?: HTMLCanvasElement | null;
 }
 
 interface DrawArmOcclusionLayerOptions {
@@ -838,6 +838,10 @@ export function drawStageForegroundLayer({
 }: DrawStageForegroundLayerOptions) {
   ctx.clearRect(0, 0, stageSize.width, stageSize.height);
   ctx.drawImage(source, 0, 0, stageSize.width, stageSize.height);
+
+  if (!maskCanvas) {
+    return;
+  }
 
   ctx.save();
   ctx.globalCompositeOperation = 'destination-in';

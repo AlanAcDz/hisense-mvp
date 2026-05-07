@@ -47,7 +47,7 @@ export interface VideoMattingStats {
 export interface VideoMattingFrame {
   width: number;
   height: number;
-  maskCanvas: HTMLCanvasElement;
+  maskCanvas: HTMLCanvasElement | null;
   sourceCanvas: HTMLCanvasElement;
   timestamp: number;
 }
@@ -175,26 +175,6 @@ function resetRecurrentState(tf: Tf | null, stateRef: { current: [Tensor, Tensor
   stateRef.current = null;
 }
 
-function syncOpaqueMaskCanvas(
-  canvasRef: { current: HTMLCanvasElement | null },
-  stageSize: StageSize
-) {
-  const canvas = canvasRef.current ?? document.createElement('canvas');
-  canvasRef.current = canvas;
-
-  if (canvas.width !== stageSize.width || canvas.height !== stageSize.height) {
-    canvas.width = stageSize.width;
-    canvas.height = stageSize.height;
-    const context = canvas.getContext('2d');
-    if (context) {
-      context.fillStyle = '#ffffff';
-      context.fillRect(0, 0, stageSize.width, stageSize.height);
-    }
-  }
-
-  return canvas;
-}
-
 function normalizeOutputs(outputs: Tensor | Tensor[]) {
   if (!Array.isArray(outputs) || outputs.length !== 6) {
     throw new Error('RVM returned an unexpected output shape.');
@@ -229,7 +209,6 @@ export function useRobustVideoMatting({
   const recurrentStateRef = useRef<[Tensor, Tensor, Tensor, Tensor] | null>(null);
   const recurrentInputSizeRef = useRef<MattingInputSize | null>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const opaqueMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const displaySourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const pendingSourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const displayMaskCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -441,6 +420,7 @@ export function useRobustVideoMatting({
           let maskCompletedAt = modelCompletedAt;
           let nextSourceCanvas = pendingSourceCanvas ?? mattingCanvas;
           let nextMaskCanvas: HTMLCanvasElement | null = null;
+          let foregroundHasAlpha = false;
 
           if (snapshotOptions && pendingSourceCanvas && tf.getBackend() === 'webgl') {
             webglCompositorRef.current ??= new RvmWebGLForegroundCompositor();
@@ -459,14 +439,14 @@ export function useRobustVideoMatting({
 
             if (foregroundCanvas) {
               nextSourceCanvas = foregroundCanvas;
-              nextMaskCanvas = syncOpaqueMaskCanvas(opaqueMaskCanvasRef, snapshotOptions.stageSize);
+              foregroundHasAlpha = true;
               pendingSourceCanvasRef.current = pendingSourceCanvas;
               pendingSourceCanvas = null;
               maskCompletedAt = performance.now();
             }
           }
 
-          if (!nextMaskCanvas) {
+          if (!nextMaskCanvas && !foregroundHasAlpha) {
             if (!maskCanvasRef.current) {
               maskCanvasRef.current = document.createElement('canvas');
             }
@@ -534,7 +514,7 @@ export function useRobustVideoMatting({
           recurrentStateRef.current = [r1o, r2o, r3o, r4o];
           outputs = null;
           const completedAt = performance.now();
-          if (!nextMaskCanvas) {
+          if (!nextMaskCanvas && !foregroundHasAlpha) {
             throw new Error('Video matting did not produce a foreground mask.');
           }
 
