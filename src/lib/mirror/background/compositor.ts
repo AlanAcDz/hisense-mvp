@@ -54,15 +54,6 @@ interface DrawStageForegroundLayerOptions {
   maskCanvas: HTMLCanvasElement;
 }
 
-interface DrawStageMaskedForegroundLayerOptions {
-  ctx: CanvasRenderingContext2D;
-  coverLayout: CoverLayout;
-  stageSize: StageSize;
-  source: CanvasImageSource;
-  maskCanvas: HTMLCanvasElement;
-  mirror?: boolean;
-}
-
 interface DrawArmOcclusionLayerOptions {
   ctx: CanvasRenderingContext2D;
   coverLayout: CoverLayout;
@@ -847,31 +838,6 @@ export function drawStageForegroundLayer({
 }: DrawStageForegroundLayerOptions) {
   ctx.clearRect(0, 0, stageSize.width, stageSize.height);
   ctx.drawImage(source, 0, 0, stageSize.width, stageSize.height);
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-in';
-  ctx.drawImage(maskCanvas, 0, 0, stageSize.width, stageSize.height);
-  ctx.restore();
-  ctx.globalCompositeOperation = 'source-over';
-}
-
-export function drawStageMaskedForegroundLayer({
-  ctx,
-  coverLayout,
-  stageSize,
-  source,
-  maskCanvas,
-  mirror = true,
-}: DrawStageMaskedForegroundLayerOptions) {
-  ctx.clearRect(0, 0, stageSize.width, stageSize.height);
-
-  ctx.save();
-  if (mirror) {
-    ctx.translate(stageSize.width, 0);
-    ctx.scale(-1, 1);
-  }
-  ctx.drawImage(source, coverLayout.offsetX, coverLayout.offsetY, coverLayout.width, coverLayout.height);
-  ctx.restore();
 
   ctx.save();
   ctx.globalCompositeOperation = 'destination-in';
