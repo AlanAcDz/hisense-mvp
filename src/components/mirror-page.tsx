@@ -115,10 +115,10 @@ export function MirrorPage({ StageComponent = MirrorStage }: MirrorPageProps) {
       ) : null}
 
       {showSubjectDetectedOverlay ? (
-        <div className="pointer-events-none absolute inset-0 z-[80] grid place-items-center">
+        <div className="pointer-events-none absolute inset-0 z-[80]">
           <video
             key={overlayPlaybackKey}
-            className="h-auto w-[min(42rem,58vw)] max-w-[82vw] object-contain"
+            className="h-full w-full object-cover"
             src={SUBJECT_DETECTED_OVERLAY_VIDEO_URL}
             autoPlay
             muted
